@@ -33,17 +33,21 @@ class DMARecorder:
             datas.append(wb.read(base + 4*i))
         return datas
 
+wb.write(wb.mems.main_ram.base, 0x11223344)
+test = wb.read(wb.mems.main_ram.base)
+print("----------" + str(test))
+
 rx_recorder = DMARecorder("rx_dma_recorder")
-rx_recorder.capture(0x0000, 32)
-datas = rx_recorder.upload(wb.mems.main_ram.base, 32)
+rx_recorder.capture(0x0000, 128)
+datas = rx_recorder.upload(wb.mems.main_ram.base, 128)
 for data in datas:
     print("{:08x}".format(data))
 
-tx_recorder = DMARecorder("tx_dma_recorder")
-tx_recorder.capture(0x0000, 32)
-datas = tx_recorder.upload(wb.mems.main_ram.base, 32)
-for data in datas:
-    print("{:08x}".format(data))
+#tx_recorder = DMARecorder("tx_dma_recorder")
+#tx_recorder.capture(0x0000, 4 * 128)
+#datas = tx_recorder.upload(wb.mems.main_ram.base, 32)
+#for data in datas:
+#    print("{:08x}".format(data))
 
 # # #
 
