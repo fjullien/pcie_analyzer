@@ -1,0 +1,49 @@
+[*]
+[*] GTKWave Analyzer v3.3.68 (w)1999-2016 BSI
+[*] Tue Feb 25 19:26:27 2020
+[*]
+[dumpfile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/descrambler/sim.vcd"
+[dumpfile_mtime] "Tue Feb 25 19:20:55 2020"
+[dumpfile_size] 5846304
+[savefile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/descrambler/wave.gtkw"
+[timestart] 0
+[size] 1920 1121
+[pos] -1 -29
+*-15.000000 92395 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 361
+[signals_width] 462
+[sst_expanded] 1
+[sst_vpaned_height] 335
+@200
+-GTP
+@22
+[color] 2
+detect_sink_payload_data[15:0]
+@28
+[color] 2
+detect_sink_payload_ctrl[1:0]
+@200
+-DETECTOR SOURCE
+@22
+detect_source_payload_data[15:0]
+@28
+detect_source_payload_ctrl[1:0]
+@29
+detect_source_payload_osets[1:0]
+@22
+detect_source_payload_type[3:0]
+@200
+-DESCRAMBLER SOURCE
+@22
+[color] 3
+descrambler_source_payload_data[15:0]
+@28
+[color] 3
+descrambler_source_payload_ctrl[1:0]
+[color] 3
+descrambler_source_payload_osets[1:0]
+@22
+[color] 3
+descrambler_source_payload_type[3:0]
+[pattern_trace] 1
+[pattern_trace] 0

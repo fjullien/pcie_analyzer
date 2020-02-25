@@ -1,0 +1,50 @@
+[*]
+[*] GTKWave Analyzer v3.3.86 (w)1999-2017 BSI
+[*] Tue Feb 25 15:38:24 2020
+[*]
+[dumpfile] "/home/odyssee/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/sim.vcd"
+[dumpfile_mtime] "Tue Feb 25 15:36:20 2020"
+[dumpfile_size] 35235
+[savefile] "/home/odyssee/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/wave.gtkw"
+[timestart] 6
+[size] 1920 1120
+[pos] -1 -1
+*-6.000000 215 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 249
+[signals_width] 302
+[sst_expanded] 1
+[sst_vpaned_height] 335
+@22
+streamer_source_payload_data[15:0]
+@28
+streamer_source_payload_ctrl[1:0]
+streamer_source_payload_osets[1:0]
+@22
+streamer_source_payload_type[3:0]
+@28
+streamer_source_ready
+streamer_source_valid
+@22
+trigger_size_storage[7:0]
+wrport_adr[6:0]
+wrport_dat_w[17:0]
+@28
+wrport_we
+trigger_armed_storage
+@22
+[color] 6
+trigger_data0[15:0]
+[color] 2
+trigger_data1[15:0]
+@23
+trigger_addr[6:0]
+@22
+trigger_matches[7:0]
+@820
+[color] 3
+state[119:0]
+@22
+trigger_dat_r[17:0]
+trigger_adr[6:0]
+[pattern_trace] 1
+[pattern_trace] 0

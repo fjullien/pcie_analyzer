@@ -26,8 +26,14 @@ from liteeth.frontend.etherbone import LiteEthEtherbone
 
 from liteiclink.transceiver.gtp_7series import GTPQuadPLL, GTP
 
-from pcie_analyzer.descrambler import Descrambler, DetectOrderedSets
-from pcie_analyzer.common import *
+import sys
+sys.path.append("./pcie_analyzer")
+sys.path.append("./pcie_analyzer/descrambler")
+sys.path.append("./pcie_analyzer/trigger")
+
+from descrambler import Descrambler, DetectOrderedSets
+from trigger import Trigger
+from common import *
 
 # *********************************************************
 # *                                                       *
@@ -293,7 +299,7 @@ class PCIeAnalyzer(SoCSDRAM):
                 gtp.cd_rx.clk)
 
         # *********************************************************
-        # *        Ordered Sets Detector / Descrambler            *
+        # *        Ordered Sets Detector / Descrambler RX         *
         # *********************************************************
         gtp0_ready = Signal()
         self.specials += MultiReg(qpll.lock & self.gtp0.rx_ready, gtp0_ready, "gtp0_rx")
@@ -307,16 +313,39 @@ class PCIeAnalyzer(SoCSDRAM):
             self.rx_detector.source.connect(self.rx_descrambler.sink),
         ]
 
+        # *********************************************************
+        # *        Ordered Sets Detector / Descrambler TX         *
+        # *********************************************************
         gtp1_ready = Signal()
         self.specials += MultiReg(qpll.lock & self.gtp0.rx_ready, gtp1_ready, "gtp1_rx")
 
-        self.submodules.tx_detector   = ClockDomainsRenamer("gtp1_rx")(DetectOrderedSets())
+        self.submodules.tx_detector    = ClockDomainsRenamer("gtp1_rx")(DetectOrderedSets())
         self.submodules.tx_descrambler = ClockDomainsRenamer("gtp1_rx")(Descrambler(test_pattern))
         self.comb += [
             self.gtp1.source.connect(self.tx_detector.sink, omit={"valid"}),
             self.tx_detector.sink.valid.eq(gtp1_ready),
             self.tx_detector.source.connect(self.tx_descrambler.sink),
         ]
+
+        # *********************************************************
+        # *                     Trigger RX                        *
+        # *********************************************************
+        self.submodules.rx_trigger = ClockDomainsRenamer("gtp0_rx")(Trigger("gtp0_rx"))
+        self.comb += [
+            self.rx_descrambler.source.connect(self.rx_trigger.sink),
+        ]
+        self.add_csr("rx_trigger_mem")
+        self.add_csr("rx_trigger")
+
+        # *********************************************************
+        # *                     Trigger TX                        *
+        # *********************************************************
+        self.submodules.tx_trigger = ClockDomainsRenamer("gtp1_rx")(Trigger("gtp1_rx"))
+        self.comb += [
+            self.tx_descrambler.source.connect(self.tx_trigger.sink),
+        ]
+        self.add_csr("tx_trigger_mem")
+        self.add_csr("tx_trigger")
 
         # *********************************************************
         # *                    Recorder RX                        *
@@ -339,7 +368,7 @@ class PCIeAnalyzer(SoCSDRAM):
         #self.specials += MultiReg(rx_start_record, rx_fifo_valid, "gtp0_rx")
 
         self.comb += [
-            self.rx_descrambler.source.connect(rx_converter.sink, omit={"osets", "type", "valid"}),
+            self.rx_trigger.source.connect(rx_converter.sink),
             rx_converter.sink.trig.eq(0b10),
             rx_converter.sink.valid.eq(1),
             rx_converter.source.connect(rx_cdc.sink),
@@ -371,7 +400,7 @@ class PCIeAnalyzer(SoCSDRAM):
         #self.specials += MultiReg(tx_start_record, tx_fifo_valid, "gtp1_rx")
 
         self.comb += [
-            self.tx_descrambler.source.connect(tx_converter.sink, omit={"osets", "type", "valid"}),
+            self.tx_trigger.source.connect(tx_converter.sink),
             tx_converter.sink.trig.eq(0b10),
             tx_converter.sink.valid.eq(1),
             tx_converter.source.connect(tx_cdc.sink),
@@ -390,22 +419,22 @@ class PCIeAnalyzer(SoCSDRAM):
         self.sync += led_counter.eq(led_counter + 1)
         self.comb += platform.request("user_led", 0).eq(led_counter[24])
 
-        self.comb += platform.request("user_led", 1).eq(gtp0_ready)
-        self.comb += platform.request("user_led", 2).eq(gtp1_ready)
+        self.comb += platform.request("user_led", 1).eq(self.gtp0.rx_cdr_lock)
+        self.comb += platform.request("user_led", 2).eq(self.gtp1.rx_cdr_lock)
         self.comb += platform.request("user_led", 3).eq(0)
 
         # *********************************************************
         # *                          ILA                          *
         # *********************************************************
-        from litescope import LiteScopeAnalyzer
-        analyzer_signals = [
-            self.rx_descrambler.source.data,
-            self.rx_descrambler.source.ctrl,
-            self.rx_descrambler.source.type,
-        ]
-
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 4096, clock_domain="gtp0_rx", csr_csv="tools/analyzer.csv")
-        self.add_csr("analyzer")
+        #from litescope import LiteScopeAnalyzer
+        #analyzer_signals = [
+        #    self.rx_descrambler.source.data,
+        #    self.rx_descrambler.source.ctrl,
+        #    self.rx_descrambler.source.type,
+        #]
+        #
+        #self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 4096, clock_domain="gtp0_rx", csr_csv="tools/analyzer.csv")
+        #self.add_csr("analyzer")
 
         #from litescope import LiteScopeAnalyzer
         #analyzer_signals = [

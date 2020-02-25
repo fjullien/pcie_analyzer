@@ -7,7 +7,9 @@ from litex.soc.interconnect import stream
 
 from enum import IntEnum
 
-from pcie_analyzer.common import *
+import sys
+sys.path.append("..")
+from common import *
 
 # *********************************************************
 # *                                                       *
