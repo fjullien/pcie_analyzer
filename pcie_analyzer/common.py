@@ -21,16 +21,16 @@ descrambler_layout = [
 ]
 
 trigger_layout = [
-    ("data"   , 16), # 24 bytes
-    ("ctrl"   , 2),  # 24 K symbols flag
-    ("trig"   , 2)   # Trigger position indicator
+    ("data"   , 16), # 2 bytes
+    ("ctrl"   , 2),  # 2 K symbols flag
+    ("trig"   , 1)   # 1 Trigger position indicator
 #   ("spare"  , 1)   # 
 ]
 
 recorder_layout = [
     ("data"   , 192), # 24 bytes
     ("ctrl"   , 24),  # 24 K symbols flag
-    ("trig"   , 24)   # Trigger position indicator
+    ("trig"   , 12)   # Trigger position indicator
 #   ("spare"  , 12)   # 
 ]
 
