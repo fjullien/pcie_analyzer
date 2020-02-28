@@ -28,8 +28,8 @@ from common import *
 def make_data(typ, osets, ctrl, data):
     return (typ << 20) + (osets << 18) + (ctrl << 16) + data
 
-def make_mem_data(ctrl, data):
-    return (ctrl << 16) + data
+def make_mem_data(dc, ctrl, data):
+    return (dc << 18) + (ctrl << 16) + data
 
 # *********************************************************
 # *                                                       *
@@ -56,6 +56,12 @@ data = [
     make_data(0, 0, 0, 0x0000),
     make_data(0, 0, 0, 0x0000),
     make_data(0, 0, 0, 0x0000),
+    make_data(0, 0, 0, 0x0000),
+    make_data(0, 0, 0, 0x0000),
+    make_data(0, 0, 0, 0x0000),
+    make_data(0, 0, 0, 0x0000),
+    make_data(0, 0, 0, 0x0000),
+    make_data(0, 0, 0, 0x0000),
     make_data(0, 0, 1, 0x00bc),
     make_data(0, 0, 3, 0x1c1c),
     make_data(0, 0, 3, 0xbc1c),
@@ -64,14 +70,15 @@ data = [
     make_data(0, 0, 0, 0x0000),
 ]
 
-#  data    ----------------------------+
-#  ctrl    ---------------------+      |
-#  address --+                  |      |
-#            |                  |      |
-#            v                  v      v
-mem_data = [(0, make_mem_data(0b11, 0xbc1c)),
-            (1, make_mem_data(0b11, 0x1c1c)),
-            (2, make_mem_data(0b00, 0x0000)),
+#  data       ------------------------------+
+#  ctrl       -----------------------+      |
+#  don't care -------------------+   |      |
+#  address    --+                |   |      |
+#               |                |   |      |
+#               v                v   v      v
+mem_data =    [(0, make_mem_data(0, 0b11, 0xbc1c)),
+               (1, make_mem_data(0, 0b11, 0x1c1c)),
+               (2, make_mem_data(0, 0b00, 0x0000)),
 ]
 
 # *********************************************************
@@ -110,7 +117,7 @@ def main_generator(dut):
     yield dut.wrport.we.eq(0)
 
     # Configure trigger
-    yield from dut.trigger.size.write(1)
+    yield from dut.trigger.size.write(len(mem_data))
     yield from dut.trigger.armed.write(1)
 
     packet = Packet(data)
@@ -119,6 +126,11 @@ def main_generator(dut):
     for i in range(1000):
         # If trigged, rearm
         if((yield dut.trigger.trigged.status)):
+            yield from dut.trigger.armed.write(0)
+            yield from dut.trigger.armed.write(0)
+            yield from dut.trigger.armed.write(0)
+            yield from dut.trigger.armed.write(0)
+            yield from dut.trigger.armed.write(0)
             yield from dut.trigger.armed.write(0)
             yield from dut.trigger.armed.write(1)
         yield

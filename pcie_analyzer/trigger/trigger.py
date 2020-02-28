@@ -20,8 +20,15 @@ from common import *
 UPPER_BYTE = slice(8,16)
 LOWER_BYTE = slice(0,8)
 DATA_WORD  = slice(0,16)
+
 UPPER_K    = 17
 LOWER_K    = 16
+K_WORD     = slice(16,18)
+
+DONT_CARE  = 18
+
+CTRL_LOWER_K = 0
+CTRL_UPPER_K = 1
 
 # *********************************************************
 # *                                                       *
@@ -62,7 +69,7 @@ class Trigger(Module, AutoCSR):
         self.specials += MultiReg(_trigged, self.trigged.status, "sys")
         self.specials += MultiReg(self.size.storage, _size, clock_domain)
 
-        self.specials.mem = Memory(18, mem_size)
+        self.specials.mem = Memory(19, mem_size)
         self.specials.rdport = self.mem.get_port(write_capable=False, async_read=True, clock_domain=clock_domain)
 
         self.sync += [
@@ -92,27 +99,35 @@ class Trigger(Module, AutoCSR):
 
         fsm.act("FIRST",
             # If we search "bc1c" we are in this situation: bc1c 1c1c xxxx
-            If(self.rdport.dat_r[DATA_WORD] == data1,
+            If((self.rdport.dat_r[DATA_WORD] == data1) & 
+               (self.rdport.dat_r[K_WORD]    == ctrl1),
                 # Full word match
                 NextValue(matches, matches + 1),
                 NextValue(addr, addr + 1),
                 NextState("ALIGNED_CHECK")
-            ),
-            # If we search "bc1c" we are in this situation: xxbc 1c1c 1cxx
-            If((self.rdport.dat_r[UPPER_BYTE] == data1[LOWER_BYTE]) &
-                (self.rdport.dat_r[LOWER_BYTE] == data0[UPPER_BYTE]),
-                # Half word match
-                NextValue(matches, matches + 1),
-                NextValue(addr, addr + 1),
-                NextState("UNALIGNED_CHECK")
-            ),
+            ).Else(
+                # If we search "bc1c" we are in this situation: xxbc 1c1c 1cxx
+                If((self.rdport.dat_r[UPPER_BYTE] == data1[LOWER_BYTE])   &
+                   (self.rdport.dat_r[LOWER_BYTE] == data0[UPPER_BYTE])   &
+                   (self.rdport.dat_r[UPPER_K]    == ctrl1[CTRL_LOWER_K]) &
+                   (self.rdport.dat_r[LOWER_K]    == ctrl0[CTRL_UPPER_K]),
+                        # Half word match
+                        NextValue(matches, matches + 1),
+                        NextValue(addr, addr + 1),
+                        NextState("UNALIGNED_CHECK")
+                )
+            )
         )
 
         fsm.act("ALIGNED_CHECK",
             If(matches == _size,
-                NextState("DONE")
+                NextState("DONE"),
+                NextValue(_trigged, 1),
+                self.source.trig.eq(1),
             ).Else(
-                If(self.rdport.dat_r[DATA_WORD] == data1,
+                If(((self.rdport.dat_r[DATA_WORD] == data1)  & 
+                    (self.rdport.dat_r[K_WORD]    == ctrl1)) |
+                    (self.rdport.dat_r[DONT_CARE] == 1),
                     NextValue(matches, matches + 1),
                     NextValue(addr, addr + 1),
                     NextState("ALIGNED_CHECK")
@@ -125,11 +140,16 @@ class Trigger(Module, AutoCSR):
         )
 
         fsm.act("UNALIGNED_CHECK",
-            If(matches == _size + 1,
-                NextState("DONE")
+            If(matches == _size,
+                NextState("DONE"),
+                NextValue(_trigged, 1),
+                self.source.trig.eq(1),
             ).Else(
-                If((self.rdport.dat_r[UPPER_BYTE] == data1[LOWER_BYTE]) &
-                        (self.rdport.dat_r[LOWER_BYTE] == data0[UPPER_BYTE]),
+                If(((self.rdport.dat_r[UPPER_BYTE] == data1[LOWER_BYTE])    &
+                    (self.rdport.dat_r[LOWER_BYTE] == data0[UPPER_BYTE])    &
+                    (self.rdport.dat_r[UPPER_K]    == ctrl1[CTRL_LOWER_K])  &
+                    (self.rdport.dat_r[LOWER_K]    == ctrl0[CTRL_UPPER_K])) |
+                    (self.rdport.dat_r[DONT_CARE]  == 1),
                         # Half word match
                         NextValue(matches, matches + 1),
                         NextValue(addr, addr + 1),
@@ -143,7 +163,6 @@ class Trigger(Module, AutoCSR):
         )
 
         fsm.act("DONE",
-            NextValue(_trigged, 1),
             If(_armed == 0,
                 NextValue(_trigged, 0),
                 NextState("IDLE")
