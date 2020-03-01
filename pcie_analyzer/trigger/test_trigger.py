@@ -123,6 +123,8 @@ def main_generator(dut):
     packet = Packet(data)
     dut.streamer.send(packet)
 
+    yield dut.trigger.enable.eq(1)
+
     for i in range(1000):
         # If trigged, rearm
         if((yield dut.trigger.trigged.status)):

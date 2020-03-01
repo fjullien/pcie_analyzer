@@ -48,7 +48,9 @@ class Trigger(Module, AutoCSR):
         self.armed     = CSRStorage()    # Trigger is armed
         self.trigged   = CSRStatus()     # Pattern found
         self.size      = CSRStorage(8)   # Pattern size - 1
-        
+
+        self.enable   = Signal()
+
         self.sink   =   sink = stream.Endpoint(descrambler_layout)
         self.source = source = stream.Endpoint(trigger_layout)
 
@@ -87,7 +89,8 @@ class Trigger(Module, AutoCSR):
         ]
 
         # FSM
-        self.submodules.fsm = fsm = FSM(reset_state="IDLE")
+        self.submodules.fsm = fsm = ResetInserter()(FSM(reset_state="IDLE"))
+        self.comb += self.fsm.reset.eq(~self.enable)
 
         fsm.act("IDLE",
             If(_armed,
@@ -163,8 +166,6 @@ class Trigger(Module, AutoCSR):
         )
 
         fsm.act("DONE",
-            If(_armed == 0,
-                NextValue(_trigged, 0),
-                NextState("IDLE")
-            )
+            NextValue(_trigged, 0),
+            NextState("IDLE")
         )
