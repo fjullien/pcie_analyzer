@@ -27,6 +27,7 @@ class RingRecorder(Module, AutoCSR):
         self.offset   = CSRStorage(32)    # Trigger offset
 
         self.trigAddr = Signal(32)
+        self.enable   = Signal()
 
         self.source = source = stream.Endpoint([("address", dram_port.address_width),
                                                 ("data", dram_port.data_width)])
@@ -45,6 +46,7 @@ class RingRecorder(Module, AutoCSR):
             self.stride.source.connect(self.fifo.sink),
             source.address.eq(addr),
             source.data.eq(self.fifo.source.payload.raw_bits()),
+            self.stride.sink.valid.eq(self.enable),
         ]
 
         # FSM
@@ -56,7 +58,7 @@ class RingRecorder(Module, AutoCSR):
             NextValue(count, 0),
             If(self.start.re,
                 NextValue(self.finished.status, 0),
-                NextValue(self.stride.sink.valid, 1),
+                NextValue(self.enable, 1),
                 NextState("FILL_PRE_TRIG")
             )
         )
@@ -105,7 +107,7 @@ class RingRecorder(Module, AutoCSR):
         )
 
         fsm.act("DONE",
-            NextValue(self.stride.sink.valid, 0),
+            NextValue(self.enable, 0),
             NextValue(self.finished.status, 1),
             If(self.stop.re,
 
