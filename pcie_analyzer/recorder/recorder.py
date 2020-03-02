@@ -21,6 +21,10 @@ from common import *
 
 class RingRecorder(Module, AutoCSR):
     def __init__(self, clock_domain, dram_port, base, length):
+        
+        # *********************************************************
+        # *                    Interface                          *
+        # *********************************************************
         self.start    = CSR()             # Start recorder
         self.stop     = CSR()             # Stop recorder
         self.finished = CSRStatus()       # Capture finished
@@ -34,8 +38,9 @@ class RingRecorder(Module, AutoCSR):
                                                 ("data", dram_port.data_width)])
         self.sink   = sink   = stream.Endpoint(trigger_layout)
 
-        # # #
-
+        # *********************************************************
+        # *                      Signals                          *
+        # *********************************************************
         addr     = Signal(32)
         count    = Signal(32)
         addrIncr = dram_port.data_width//8
@@ -47,6 +52,9 @@ class RingRecorder(Module, AutoCSR):
         _offset   = Signal(32)
         _trigAddr = Signal(32)
 
+        # *********************************************************
+        # *                         CDC                           *
+        # *********************************************************
         self.specials += MultiReg(self.start.re, _start, clock_domain)
         self.specials += MultiReg(self.stop.re, _stop, clock_domain)
         self.specials += MultiReg(_finished, self.finished.status, "sys")
@@ -54,9 +62,15 @@ class RingRecorder(Module, AutoCSR):
         self.specials += MultiReg(self.offset.storage, _offset, clock_domain)
         self.specials += MultiReg(_trigAddr, self.trigAddr.status, "sys")
 
+        # *********************************************************
+        # *                     Submodules                        *
+        # *********************************************************
         self.submodules.stride = stream.StrideConverter(trigger_layout, recorder_layout, reverse=False)
         self.submodules.fifo   = ResetInserter()(stream.SyncFIFO(recorder_layout, 1024, buffered=True))
 
+        # *********************************************************
+        # *                    Combinatorial                      *
+        # *********************************************************
         self.comb += [
             sink.connect(self.stride.sink, omit={"valid"}),
             self.stride.source.connect(self.fifo.sink),
@@ -65,7 +79,9 @@ class RingRecorder(Module, AutoCSR):
             self.stride.sink.valid.eq(self.enable),
         ]
 
-        # FSM
+        # *********************************************************
+        # *                        FSM                            *
+        # *********************************************************
         fsm = FSM(reset_state="IDLE")
         fsm = ClockDomainsRenamer(clock_domain)(FSM())
         self.submodules.fsm = fsm
