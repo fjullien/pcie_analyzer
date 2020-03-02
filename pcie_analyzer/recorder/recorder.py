@@ -35,8 +35,9 @@ class RingRecorder(Module, AutoCSR):
 
         # # #
 
-        addr  = Signal(32)
-        count = Signal(32)
+        addr     = Signal(32)
+        count    = Signal(32)
+        addrIncr = dram_port.data_width//8
 
         self.submodules.stride = stream.StrideConverter(trigger_layout, recorder_layout, reverse=False)
         self.submodules.fifo   = ResetInserter()(stream.SyncFIFO(recorder_layout, 1024, buffered=True))
@@ -67,7 +68,7 @@ class RingRecorder(Module, AutoCSR):
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
-                NextValue(addr, addr + 1),
+                NextValue(addr, addr + addrIncr),
                 NextValue(count, count + 1),
                 If(count == self.offset.storage,
                     NextValue(count, 0),
@@ -80,8 +81,8 @@ class RingRecorder(Module, AutoCSR):
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
-                NextValue(addr, addr + 1),
-                If(addr == (base + length - 1),
+                NextValue(addr, addr + addrIncr),
+                If(addr == (base + length - addrIncr),
                     NextValue(addr, base),
                 ),
                 If(self.fifo.source.trig != 0,
@@ -95,8 +96,8 @@ class RingRecorder(Module, AutoCSR):
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
-                NextValue(addr, addr + 1),
-                If(addr == (base + length - 1),
+                NextValue(addr, addr + addrIncr),
+                If(addr == (base + length - addrIncr),
                     NextValue(addr, base),
                 ),
                 NextValue(count, count + 1),

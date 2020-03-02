@@ -191,7 +191,7 @@ class TB(Module):
         port = DummyPort(32, 256)
 
         RING_BUFFER_BASE_ADDRESS = 0x1000
-        RING_BUFFER_SIZE         = 0x10
+        RING_BUFFER_SIZE         = 0x100
 
         self.submodules.streamer = PacketStreamer(trigger_layout)
         self.submodules.recorder = RingRecorder(port, RING_BUFFER_BASE_ADDRESS, RING_BUFFER_SIZE)
