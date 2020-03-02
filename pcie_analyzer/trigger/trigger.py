@@ -45,6 +45,10 @@ CTRL_UPPER_K = 1
 class Trigger(Module, AutoCSR):
 
     def __init__(self, clock_domain, mem_size=128):
+
+        # *********************************************************
+        # *                    Interface                          *
+        # *********************************************************
         self.armed     = CSRStorage()    # Trigger is armed
         self.trigged   = CSRStatus()     # Pattern found
         self.size      = CSRStorage(8)   # Pattern size - 1
@@ -54,8 +58,9 @@ class Trigger(Module, AutoCSR):
         self.sink   =   sink = stream.Endpoint(descrambler_layout)
         self.source = source = stream.Endpoint(trigger_layout)
 
-        # # #
-
+        # *********************************************************
+        # *                      Signals                          *
+        # *********************************************************
         data0    = Signal(16)
         data1    = Signal(16)
         ctrl0    = Signal(2)
@@ -67,13 +72,22 @@ class Trigger(Module, AutoCSR):
         _trigged = Signal()
         _size    = Signal(8)
 
+        # *********************************************************
+        # *                         CDC                           *
+        # *********************************************************
         self.specials += MultiReg(self.armed.storage, _armed, clock_domain)
         self.specials += MultiReg(_trigged, self.trigged.status, "sys")
         self.specials += MultiReg(self.size.storage, _size, clock_domain)
 
+        # *********************************************************
+        # *                     Specials                          *
+        # *********************************************************
         self.specials.mem = Memory(19, mem_size)
         self.specials.rdport = self.mem.get_port(write_capable=False, async_read=True, clock_domain=clock_domain)
 
+        # *********************************************************
+        # *                    Synchronous                        *
+        # *********************************************************
         sync = getattr(self.sync, clock_domain)
         sync += [
             data0.eq(self.sink.data),
@@ -82,6 +96,9 @@ class Trigger(Module, AutoCSR):
             ctrl1.eq(ctrl0),
          ]
 
+        # *********************************************************
+        # *                    Combinatorial                      *
+        # *********************************************************
         self.comb += [
             self.source.data.eq(data1),
             self.source.ctrl.eq(ctrl1),
@@ -89,7 +106,9 @@ class Trigger(Module, AutoCSR):
             self.sink.ready.eq(1),
         ]
 
-        # FSM
+        # *********************************************************
+        # *                        FSM                            *
+        # *********************************************************
         fsm = ResetInserter()(FSM(reset_state="IDLE"))
         self.submodules.fsm = ClockDomainsRenamer(clock_domain)(fsm)
         self.comb += self.fsm.reset.eq(~self.enable)
@@ -104,7 +123,7 @@ class Trigger(Module, AutoCSR):
 
         fsm.act("FIRST",
             # If we search "bc1c" we are in this situation: bc1c 1c1c xxxx
-            If((self.rdport.dat_r[DATA_WORD] == data1) & 
+            If((self.rdport.dat_r[DATA_WORD] == data1) &
                (self.rdport.dat_r[K_WORD]    == ctrl1),
                 # Full word match
                 NextValue(matches, matches + 1),
@@ -130,7 +149,7 @@ class Trigger(Module, AutoCSR):
                 NextValue(_trigged, 1),
                 self.source.trig.eq(1),
             ).Else(
-                If(((self.rdport.dat_r[DATA_WORD] == data1)  & 
+                If(((self.rdport.dat_r[DATA_WORD] == data1)  &
                     (self.rdport.dat_r[K_WORD]    == ctrl1)) |
                     (self.rdport.dat_r[DONT_CARE] == 1),
                     NextValue(matches, matches + 1),
