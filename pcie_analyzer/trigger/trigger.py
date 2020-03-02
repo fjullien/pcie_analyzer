@@ -74,7 +74,8 @@ class Trigger(Module, AutoCSR):
         self.specials.mem = Memory(19, mem_size)
         self.specials.rdport = self.mem.get_port(write_capable=False, async_read=True, clock_domain=clock_domain)
 
-        self.sync += [
+        sync = getattr(self.sync, clock_domain)
+        sync += [
             data0.eq(self.sink.data),
             data1.eq(data0),
             ctrl0.eq(self.sink.ctrl),
@@ -89,7 +90,8 @@ class Trigger(Module, AutoCSR):
         ]
 
         # FSM
-        self.submodules.fsm = fsm = ResetInserter()(FSM(reset_state="IDLE"))
+        fsm = ResetInserter()(FSM(reset_state="IDLE"))
+        self.submodules.fsm = ClockDomainsRenamer(clock_domain)(fsm)
         self.comb += self.fsm.reset.eq(~self.enable)
 
         fsm.act("IDLE",
