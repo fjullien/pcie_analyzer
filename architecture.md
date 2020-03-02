@@ -1,35 +1,35 @@
-    +----------------+           +----------------------+         +---------------+
-    |                +---------->+                      |         |               |
-    |     GTP        |           |   DetectOrderedSets  +-------->+  Descrambler  +----+
-    |                |     +---->+                      |         |               |    |
-    +----------------+     |     +----------------------+         +---------------+    |
-                           |                                                           |
-                           |                                                           |
-                           |                                                           |
-                           +                                                           |
-                 qpll.lock & gtp.rx_ready                                              |
-                                                                                       |
-      +--------------------------------------------------------------------------------+
-      |
-      |
-      |
-      |    +-----------+         +-------------------+        +------------+
-      |    |           +-------->+                   |        |            |
-      +--->+ Trigger   |         |  StrideConverter  +------->+ AsyncFIFO  +-----------+
-           |           |    +--->+                   |        |            |           |
-           +-----------+    |    +-------------------+        +------------+           |
-                            |                                                          |
-                            |                                                          |
-                            +                                                          |
-                      rx_start_record                                                  |
-                                                                                       |
-      +--------------------------------------------------------------------------------+
-      |
-      |    +----------+        +----------------------+         +----------------------+
-      |    |          |        |                      |         |                      |
-      +--->+ Recorder +------->+ LiteDRAMDMAWriter    +-------->+ DDR Memory controller|
-           |          |        |                      |         |                      |
-           +----------+        +----------------------+         +----------------------+
+    +-----+                    +----------------------+         +---------------+
+    |     +------------------->+                      |         |               |
+    | GTP |                    |   DetectOrderedSets  +-------->+  Descrambler  +----+
+    |     |      valid +------>+                      |         |               |    |
+    +-----+            |       +----------------------+         +---------------+    |
+                       |                                                             |
+                       |                                                             |
+                       |                                                             |
+                       +                                                             |
+             qpll.lock & gtp.rx_ready          +---------+                           |
+                                               |         +<--------------------------+
+    +------------------------------------------+ Trigger |
+    |                                          |         +<-----------------------+
+    |                                          +---------+                        |
+    |                                                                             |
+    |          +------------------------------------------------------------+     | enable
+    |          |                                                            |     |
+    |          |  +-----------------+    +--------------+    +-----------+  +-----+
+    |          |  |                 |    |              |    |           |  |
+    +------------>+ StrideConverter +--->+ RingRecorder +--->+ AsyncFIFO +-----------+
+               |  |                 |    |              |    |           |  |        |
+               |  +-----------------+    +--------------+    +-----------+  |        |
+               |                                                            |        |
+               +------------------------------------------------------------+        |
+                                                                                     |
+    +--------------------------------------------------------------------------------+
+    |
+    |                        +----------------------+         +----------------------+
+    |                        |                      |         |                      |
+    +----------------------->+ LiteDRAMDMAWriter    +-------->+ DDR Memory controller|
+                             |                      |         |                      |
+                             +----------------------+         +----------------------+
 
 
 ## GTP
@@ -104,7 +104,7 @@ Source:
     trigger_layout = [
         ("data" , 16),
         ("ctrl" , 2),
-        ("trig" , 2)
+        ("trig" , 1)
     ]
 
 Trigger compares incoming datas to a trigger memory value. Each time there is a match, trigger memory presents the next data to be compared. If the comparaison fails, trigger memory pointer is reset to 0.
@@ -124,7 +124,7 @@ Source:
     recorder_layout= [
         ("data" , 192),
         ("ctrl" , 24),
-        ("trig" , 24)
+        ("trig" , 12)
     ]
 Convert source stream size to native memory size (here it is 256 bits).
 
@@ -136,18 +136,18 @@ Data layout:
     recorder_layout= [
         ("data" , 192),
         ("ctrl" , 24),
-        ("trig" , 24)
+        ("trig" , 12)
     ]
 
 ## Recorder
 
 This module starts and stops LiteDRAMDMAWriter depending on storage parameters and trigger conditions.
 When software want to capture something then:
-1. *rx_start_record* is set (see diagram above),
+1. Trigger is configured and enabled,
 2. DMA is started. DMA will act as a ring buffer of configured depth. It continuously stores data until it is stopped,
 3. Once a number of pre-trigger data have been captured, Recorder waits for a trigger condition (DMA still runs),
 4. When trigger condition is detected, the current DMA address is saved,
 5. Recorder waits for post-trigger datas,
-6. DMA is stopped, *rx_start_record* is unset.
+6. DMA is stopped, trigger is disabled,
 7. Sotfware can now get datas from address [@trigger - pre_samples_size] to [@trigger + post_samples_size]
 
