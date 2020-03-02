@@ -65,8 +65,11 @@ class RingRecorder(Module, AutoCSR):
         # *********************************************************
         # *                     Submodules                        *
         # *********************************************************
-        self.submodules.stride = stream.StrideConverter(trigger_layout, recorder_layout, reverse=False)
-        self.submodules.fifo   = ResetInserter()(stream.SyncFIFO(recorder_layout, 1024, buffered=True))
+        stride = stream.StrideConverter(trigger_layout, recorder_layout, reverse=False)
+        self.submodules.stride = ClockDomainsRenamer(clock_domain)(stride)
+
+        fifo = ResetInserter()(stream.SyncFIFO(recorder_layout, 1024, buffered=True))
+        self.submodules.fifo   = ClockDomainsRenamer(clock_domain)(fifo)
 
         # *********************************************************
         # *                    Combinatorial                      *
@@ -83,8 +86,7 @@ class RingRecorder(Module, AutoCSR):
         # *                        FSM                            *
         # *********************************************************
         fsm = FSM(reset_state="IDLE")
-        fsm = ClockDomainsRenamer(clock_domain)(FSM())
-        self.submodules.fsm = fsm
+        self.submodules.fsm = ClockDomainsRenamer(clock_domain)(fsm)
 
         fsm.act("IDLE",
             self.fifo.reset.eq(1),
