@@ -104,7 +104,7 @@ class RingRecorder(Module, AutoCSR):
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
                 NextValue(addr, addr + addrIncr),
-                NextValue(count, count + 1),
+                NextValue(count, count + addrIncr),
                 If(count == _offset,
                     NextValue(count, 0),
                     NextState("WAIT_TRIGGER")
@@ -135,7 +135,7 @@ class RingRecorder(Module, AutoCSR):
                 If(addr == (base + length - addrIncr),
                     NextValue(addr, base),
                 ),
-                NextValue(count, count + 1),
+                NextValue(count, count + addrIncr),
                 If(count == _size,
                     NextState("DONE")
                 )
