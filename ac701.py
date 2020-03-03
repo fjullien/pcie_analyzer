@@ -30,9 +30,11 @@ import sys
 sys.path.append("./pcie_analyzer")
 sys.path.append("./pcie_analyzer/descrambler")
 sys.path.append("./pcie_analyzer/trigger")
+sys.path.append("./pcie_analyzer/recorder")
 
 from descrambler import Descrambler, DetectOrderedSets
 from trigger import Trigger
+from recorder import RingRecorder
 from common import *
 
 # *********************************************************
@@ -317,7 +319,7 @@ class PCIeAnalyzer(SoCSDRAM):
         # *        Ordered Sets Detector / Descrambler TX         *
         # *********************************************************
         gtp1_ready = Signal()
-        self.specials += MultiReg(qpll.lock & self.gtp0.rx_ready, gtp1_ready, "gtp1_rx")
+        self.specials += MultiReg(qpll.lock & self.gtp1.rx_ready, gtp1_ready, "gtp1_rx")
 
         self.submodules.tx_detector    = ClockDomainsRenamer("gtp1_rx")(DetectOrderedSets())
         self.submodules.tx_descrambler = ClockDomainsRenamer("gtp1_rx")(Descrambler(test_pattern))
@@ -330,7 +332,7 @@ class PCIeAnalyzer(SoCSDRAM):
         # *********************************************************
         # *                     Trigger RX                        *
         # *********************************************************
-        self.submodules.rx_trigger = ClockDomainsRenamer("gtp0_rx")(Trigger("gtp0_rx"))
+        self.submodules.rx_trigger = Trigger("gtp0_rx")
         self.comb += [
             self.rx_descrambler.source.connect(self.rx_trigger.sink),
         ]
@@ -340,7 +342,7 @@ class PCIeAnalyzer(SoCSDRAM):
         # *********************************************************
         # *                     Trigger TX                        *
         # *********************************************************
-        self.submodules.tx_trigger = ClockDomainsRenamer("gtp1_rx")(Trigger("gtp1_rx"))
+        self.submodules.tx_trigger = Trigger("gtp1_rx")
         self.comb += [
             self.tx_descrambler.source.connect(self.tx_trigger.sink),
         ]
@@ -350,65 +352,45 @@ class PCIeAnalyzer(SoCSDRAM):
         # *********************************************************
         # *                    Recorder RX                        *
         # *********************************************************
-        rx_converter = stream.StrideConverter(trigger_layout, recorder_layout)
+        rx_port = self.sdram.crossbar.get_port("write", 256)
 
-        rx_converter = ClockDomainsRenamer("gtp0_rx")(rx_converter)
-        self.submodules.rx_converter = rx_converter
+        self.submodules.rx_recorder = RingRecorder("gtp0_rx", rx_port, 0, 0x100000)
+        self.add_csr("rx_recorder")
 
-        rx_cdc = stream.AsyncFIFO(recorder_layout, 1024, buffered=True)
+        rx_cdc = stream.AsyncFIFO([("address", rx_port.address_width), ("data", rx_port.data_width)],
+                                  1024, buffered=True)
         rx_cdc = ClockDomainsRenamer({"write": "gtp0_rx", "read": "sys"})(rx_cdc)
         self.submodules.rx_cdc = rx_cdc
 
-        self.submodules.rx_dma_recorder = LiteDRAMDMAWriter(self.sdram.crossbar.get_port("write", 256))
-        self.rx_dma_recorder.add_csr()
-        self.add_csr("rx_dma_recorder")
-
-        #rx_start_record = Signal()
-        #rx_fifo_valid   = Signal()
-        #self.specials += MultiReg(rx_start_record, rx_fifo_valid, "gtp0_rx")
+        self.submodules.rx_dma = LiteDRAMDMAWriter(rx_port)
 
         self.comb += [
-            self.rx_trigger.source.connect(rx_converter.sink),
-            rx_converter.sink.trig.eq(0b10),
-            rx_converter.sink.valid.eq(1),
-            rx_converter.source.connect(rx_cdc.sink),
-            
-            rx_cdc.source.ready.eq(self.rx_dma_recorder.sink.ready),
-            self.rx_dma_recorder.sink.valid.eq(rx_cdc.source.valid),
-            self.rx_dma_recorder.sink.data[RECORD_DATA].eq(rx_cdc.source.data),
-            self.rx_dma_recorder.sink.data[RECORD_CTRL].eq(rx_cdc.source.ctrl),
+            self.rx_trigger.source.connect(self.rx_recorder.sink),
+            self.rx_trigger.enable.eq(self.rx_recorder.enable),
+            self.rx_recorder.source.connect(rx_cdc.sink),
+            rx_cdc.source.connect(self.rx_dma.sink),
         ]
 
         # *********************************************************
         # *                    Recorder TX                        *
         # *********************************************************
-        tx_converter = stream.StrideConverter(trigger_layout, recorder_layout)
+        tx_port = self.sdram.crossbar.get_port("write", 256)
 
-        tx_converter = ClockDomainsRenamer("gtp1_rx")(tx_converter)
-        self.submodules.tx_converter = tx_converter
+        self.submodules.tx_recorder = RingRecorder("gtp1_rx", tx_port, 0x100000, 0x100000)
+        self.add_csr("tx_recorder")
 
-        tx_cdc = stream.AsyncFIFO(recorder_layout, 1024, buffered=True)
-        tx_cdc = ClockDomainsRenamer({"write": "gtp1_rx", "read": "sys"})(tx_cdc)
+        tx_cdc = stream.AsyncFIFO([("address", tx_port.address_width), ("data", tx_port.data_width)],
+                                  1024, buffered=True)
+        tx_cdc = ClockDomainsRenamer({"write": "gtp1_rx", "read": "sys"})(rx_cdc)
         self.submodules.tx_cdc = tx_cdc
 
-        self.submodules.tx_dma_recorder = LiteDRAMDMAWriter(self.sdram.crossbar.get_port("write", 256))
-        self.tx_dma_recorder.add_csr()
-        self.add_csr("tx_dma_recorder")
-
-        #tx_start_record = Signal()
-        #tx_fifo_valid   = Signal()
-        #self.specials += MultiReg(tx_start_record, tx_fifo_valid, "gtp1_rx")
+        self.submodules.tx_dma = LiteDRAMDMAWriter(tx_port)
 
         self.comb += [
-            self.tx_trigger.source.connect(tx_converter.sink),
-            tx_converter.sink.trig.eq(0b10),
-            tx_converter.sink.valid.eq(1),
-            tx_converter.source.connect(tx_cdc.sink),
-            
-            tx_cdc.source.ready.eq(self.tx_dma_recorder.sink.ready),
-            self.tx_dma_recorder.sink.valid.eq(tx_cdc.source.valid),
-            self.tx_dma_recorder.sink.data[RECORD_DATA].eq(tx_cdc.source.data),
-            self.tx_dma_recorder.sink.data[RECORD_CTRL].eq(tx_cdc.source.ctrl),
+            self.tx_trigger.source.connect(self.tx_recorder.sink),
+            self.tx_trigger.enable.eq(self.tx_recorder.enable),
+            self.tx_recorder.source.connect(tx_cdc.sink),
+            tx_cdc.source.connect(self.tx_dma.sink),
         ]
 
         # *********************************************************
@@ -416,7 +398,7 @@ class PCIeAnalyzer(SoCSDRAM):
         # *********************************************************
 
         led_counter = Signal(32)
-        self.sync += led_counter.eq(led_counter + 1)
+        self.sync.gtp0_rx += led_counter.eq(led_counter + 1)
         self.comb += platform.request("user_led", 0).eq(led_counter[24])
 
         self.comb += platform.request("user_led", 1).eq(self.gtp0.rx_cdr_lock)
@@ -426,15 +408,26 @@ class PCIeAnalyzer(SoCSDRAM):
         # *********************************************************
         # *                          ILA                          *
         # *********************************************************
-        #from litescope import LiteScopeAnalyzer
-        #analyzer_signals = [
-        #    self.rx_descrambler.source.data,
-        #    self.rx_descrambler.source.ctrl,
-        #    self.rx_descrambler.source.type,
-        #]
-        #
-        #self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 4096, clock_domain="gtp0_rx", csr_csv="tools/analyzer.csv")
-        #self.add_csr("analyzer")
+        from litescope import LiteScopeAnalyzer
+        analyzer_signals = [
+            self.rx_recorder.sink.data,
+            self.rx_recorder.enable,
+            self.rx_recorder.trigAddr.status,
+            self.rx_recorder.start.re,
+            self.rx_recorder.fsm,
+            self.rx_recorder.fifo.source.data,
+            self.rx_recorder.fifo.source.trig,
+            self.rx_recorder.fifo.level,
+            self.rx_recorder.source.address,
+            self.rx_recorder.source.data,
+            self.rx_recorder.source.ready,
+            self.rx_recorder.source.valid,
+            self.rx_descrambler.source.data,
+            self.rx_descrambler.pattern,
+        ]
+
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 4096, clock_domain="gtp0_rx", csr_csv="tools/analyzer.csv")
+        self.add_csr("analyzer")
 
         #from litescope import LiteScopeAnalyzer
         #analyzer_signals = [

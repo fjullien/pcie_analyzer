@@ -6,6 +6,7 @@
 import argparse
 
 from migen import *
+from migen.genlib.cdc import *
 
 from litex.build.generic_platform import *
 from litex.build.sim import SimPlatform
@@ -14,6 +15,7 @@ from litex.build.sim.config import SimConfig
 from litex.soc.integration.soc_sdram import *
 from litex.soc.integration.builder import *
 from litex.soc.cores import uart
+from litex.soc.interconnect import stream
 
 from litedram.common import PhySettings
 from litedram.modules import MT48LC16M16
@@ -24,7 +26,22 @@ from liteeth.phy.model import LiteEthPHYModel
 from liteeth.core import LiteEthUDPIPCore
 from liteeth.frontend.etherbone import LiteEthEtherbone
 
-# IOs ----------------------------------------------------------------------------------------------
+import sys
+sys.path.append("./pcie_analyzer")
+sys.path.append("./pcie_analyzer/descrambler")
+sys.path.append("./pcie_analyzer/trigger")
+sys.path.append("./pcie_analyzer/recorder")
+
+from descrambler import Descrambler, DetectOrderedSets
+from trigger import Trigger
+from recorder import RingRecorder
+from common import *
+
+# *********************************************************
+# *                                                       *
+# *                      IOs                              *
+# *                                                       *
+# ********************************************************
 
 _io = [
     ("sys_clk", 0, Pins(1)),
@@ -44,20 +61,30 @@ _io = [
     ),
 ]
 
-# Platform -----------------------------------------------------------------------------------------
+# *********************************************************
+# *                                                       *
+# *                      Platform                         *
+# *                                                       *
+# *********************************************************
 
 class Platform(SimPlatform):
     def __init__(self):
         SimPlatform.__init__(self, "SIM", _io)
 
-# PCIeAnalyzer -------------------------------------------------------------------------------------
+# *********************************************************
+# *                                                       *
+# *                      Analyzer                         *
+# *                                                       *
+# *********************************************************
 
 class PCIeAnalyzer(SoCSDRAM):
     def __init__(self, **kwargs):
         platform     = Platform()
         sys_clk_freq = int(1e6)
 
-        # SoCSDRAM ---------------------------------------------------------------------------------
+        # *********************************************************
+        # *                      SoC SDRAM                        *
+        # *********************************************************
         SoCSDRAM.__init__(self, platform, sys_clk_freq,
             integrated_rom_size  = 0x8000,
             integrated_sram_size = 0x1000,
@@ -67,10 +94,14 @@ class PCIeAnalyzer(SoCSDRAM):
             **kwargs
         )
 
-        # CRG --------------------------------------------------------------------------------------
+        # *********************************************************
+        # *                      CRG                              *
+        # *********************************************************
         self.submodules.crg = CRG(platform.request("sys_clk"))
 
-        # SDR SDRAM --------------------------------------------------------------------------------
+        # *********************************************************
+        # *                   SDR SDRAM                           *
+        # *********************************************************
         sdram_module = MT48LC16M16(100e6, "1:1") # use 100MHz timings
         phy_settings = PhySettings(
             memtype       = "SDR",
@@ -95,37 +126,121 @@ class PCIeAnalyzer(SoCSDRAM):
         self.add_constant("MEMTEST_ADDR_SIZE", 0)
         self.add_constant("MEMTEST_DATA_SIZE", 0)
 
-        # Ethernet ---------------------------------------------------------------------------------
-        # phy
+        # *********************************************************
+        # *                  Ethernet PHY                         *
+        # *********************************************************
         self.submodules.ethphy = LiteEthPHYModel(self.platform.request("eth"))
         self.add_csr("ethphy")
-        # core
+
+        # *********************************************************
+        # *                  Ethernet Core                        *
+        # *********************************************************
         ethcore = LiteEthUDPIPCore(self.ethphy,
             mac_address = 0x10e2d5000000,
-            ip_address  = "192.168.1.50",
+            ip_address  = "172.168.1.50",
             clk_freq    = sys_clk_freq)
         self.submodules.ethcore = ethcore
-        # etherbone
+
+        # *********************************************************
+        # *                 Etherbone bridge                      *
+        # *********************************************************
         self.submodules.etherbone = LiteEthEtherbone(self.ethcore.udp, 1234, mode="master")
         self.add_wb_master(self.etherbone.wishbone.bus)
 
-        # Record -----------------------------------------------------------------------------------
-        self.submodules.rx_dma_recorder = LiteDRAMDMAWriter(self.sdram.crossbar.get_port("write", 32))
-        self.rx_dma_recorder.add_csr()
-        self.add_csr("rx_dma_recorder")
-        self.submodules.tx_dma_recorder = LiteDRAMDMAWriter(self.sdram.crossbar.get_port("write", 32))
-        self.tx_dma_recorder.add_csr()
-        self.add_csr("tx_dma_recorder")
-        counter = Signal(32)
-        self.sync += counter.eq(counter + 1)
+        # *********************************************************
+        # *        Ordered Sets Detector / Descrambler RX         *
+        # *********************************************************
+        self.submodules.rx_detector    = DetectOrderedSets()
+        self.submodules.rx_descrambler = Descrambler(test_pattern=True)
+
         self.comb += [
-            self.rx_dma_recorder.sink.valid.eq(1),
-            self.rx_dma_recorder.sink.data.eq(counter),
-            self.tx_dma_recorder.sink.valid.eq(1),
-            self.tx_dma_recorder.sink.data.eq(counter),
+            #self.gtp0.source.connect(self.rx_detector.sink, omit={"valid"}),
+            self.rx_detector.sink.valid.eq(1),
+            self.rx_detector.source.connect(self.rx_descrambler.sink),
         ]
 
-# Build --------------------------------------------------------------------------------------------
+        # *********************************************************
+        # *        Ordered Sets Detector / Descrambler TX         *
+        # *********************************************************
+        self.submodules.tx_detector    = DetectOrderedSets()
+        self.submodules.tx_descrambler = Descrambler(test_pattern=True)
+        self.comb += [
+            #self.gtp1.source.connect(self.tx_detector.sink, omit={"valid"}),
+            self.tx_detector.sink.valid.eq(1),
+            self.tx_detector.source.connect(self.tx_descrambler.sink),
+        ]
+
+        # *********************************************************
+        # *                     Trigger RX                        *
+        # *********************************************************
+        self.submodules.rx_trigger = Trigger("sys")
+        self.comb += [
+            self.rx_descrambler.source.connect(self.rx_trigger.sink),
+        ]
+        self.add_csr("rx_trigger_mem")
+        self.add_csr("rx_trigger")
+
+        # *********************************************************
+        # *                     Trigger TX                        *
+        # *********************************************************
+        self.submodules.tx_trigger = Trigger("sys")
+        self.comb += [
+            self.tx_descrambler.source.connect(self.tx_trigger.sink),
+        ]
+        self.add_csr("tx_trigger_mem")
+        self.add_csr("tx_trigger")
+
+        # *********************************************************
+        # *                    Recorder RX                        *
+        # *********************************************************
+        rx_port = self.sdram.crossbar.get_port("write", 256)
+
+        rx_recorder = RingRecorder("sys", rx_port, 0, 0x100000)
+        self.submodules.rx_recorder = rx_recorder
+        self.add_csr("rx_recorder")
+
+        rx_cdc = stream.AsyncFIFO([("address", rx_port.address_width), ("data", rx_port.data_width)],
+                                  1024, buffered=True)
+        rx_cdc = ClockDomainsRenamer({"write": "sys", "read": "sys"})(rx_cdc)
+        self.submodules.rx_cdc = rx_cdc
+
+        self.submodules.rx_dma = LiteDRAMDMAWriter(rx_port)
+
+        self.comb += [
+            self.rx_trigger.source.connect(self.rx_recorder.sink),
+            self.rx_recorder.source.connect(rx_cdc.sink),
+            self.rx_trigger.enable.eq(self.rx_recorder.enable),
+            rx_cdc.source.connect(self.rx_dma.sink),
+        ]
+
+        # *********************************************************
+        # *                    Recorder TX                        *
+        # *********************************************************
+        tx_port = self.sdram.crossbar.get_port("write", 256)
+
+        tx_recorder = RingRecorder("sys", tx_port, 0x100000, 0x100000)
+        self.submodules.tx_recorder = tx_recorder
+        self.add_csr("tx_recorder")
+
+        tx_cdc = stream.AsyncFIFO([("address", tx_port.address_width), ("data", tx_port.data_width)],
+                                  1024, buffered=True)
+        tx_cdc = ClockDomainsRenamer({"write": "sys", "read": "sys"})(tx_cdc)
+        self.submodules.tx_cdc = tx_cdc
+
+        self.submodules.tx_dma = LiteDRAMDMAWriter(tx_port)
+
+        self.comb += [
+            self.tx_trigger.source.connect(self.tx_recorder.sink),
+            self.tx_recorder.source.connect(tx_cdc.sink),
+            self.tx_trigger.enable.eq(self.tx_recorder.enable),
+            tx_cdc.source.connect(self.tx_dma.sink),
+        ]
+
+# *********************************************************
+# *                                                       *
+# *                      Build                            *
+# *                                                       *
+# *********************************************************
 
 def main():
     parser = argparse.ArgumentParser(description="PCIeAnalyzer LiteX SoC Simulation")
@@ -144,12 +259,16 @@ def main():
 
     sim_config = SimConfig(default_clk="sys_clk")
 
-    # Configuration --------------------------------------------------------------------------------
+    # *********************************************************
+    # *                  Configuration                        *
+    # *********************************************************
     if args.rom_init:
         soc_kwargs["integrated_rom_init"] = get_mem_data(args.rom_init, "little")
-    sim_config.add_module("ethernet", "eth", args={"interface": "tap0", "ip": "192.168.1.100"})
+    sim_config.add_module("ethernet", "eth", args={"interface": "tap0", "ip": "172.168.1.100"})
 
-    # Build  ---------------------------------------------------------------------------------------
+    # *********************************************************
+    # *                  Build                                *
+    # *********************************************************
     soc     = PCIeAnalyzer(**soc_kwargs)
     builder = Builder(soc, csr_csv="tools/csr.csv")
     vns = builder.build(threads=args.threads, sim_config=sim_config,
