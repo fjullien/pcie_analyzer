@@ -200,7 +200,7 @@ class PCIeAnalyzer(SoCSDRAM):
         # *                      CRG                              *
         # *********************************************************
         self.submodules.crg = _CRG(platform, sys_clk_freq)
-        platform.add_period_constraint(self.crg.cd_sys.clk, 1e9/100e6)
+        platform.add_period_constraint(self.crg.cd_sys.clk, 1e9/sys_clk_freq)
 
         # *********************************************************
         # *                      DDR3                             *
@@ -354,7 +354,14 @@ class PCIeAnalyzer(SoCSDRAM):
         # *********************************************************
         rx_port = self.sdram.crossbar.get_port("write", 256)
 
-        self.submodules.rx_recorder = RingRecorder("gtp0_rx", rx_port, 0, 0x100000)
+        RX_RING_BUFFER_BASE_ADDRESS = 0
+        RX_RING_BUFFER_SIZE         = 0x100000
+        STRIDE_MULTIPLIER           = 12
+
+        self.submodules.rx_recorder = RingRecorder("gtp0_rx", rx_port,
+                                                   RX_RING_BUFFER_BASE_ADDRESS,
+                                                   RX_RING_BUFFER_SIZE,
+                                                   STRIDE_MULTIPLIER)
         self.add_csr("rx_recorder")
 
         rx_cdc = stream.AsyncFIFO([("address", rx_port.address_width), ("data", rx_port.data_width)],
@@ -368,7 +375,7 @@ class PCIeAnalyzer(SoCSDRAM):
             self.rx_trigger.source.connect(self.rx_recorder.sink),
             self.rx_trigger.enable.eq(self.rx_recorder.enable),
             self.rx_recorder.source.connect(rx_cdc.sink),
-            rx_cdc.source.connect(self.rx_dma.sink),
+            self.rx_cdc.source.connect(self.rx_dma.sink),
         ]
 
         # *********************************************************
@@ -376,12 +383,19 @@ class PCIeAnalyzer(SoCSDRAM):
         # *********************************************************
         tx_port = self.sdram.crossbar.get_port("write", 256)
 
-        self.submodules.tx_recorder = RingRecorder("gtp1_rx", tx_port, 0x100000, 0x100000)
+        TX_RING_BUFFER_BASE_ADDRESS = 0x100000
+        TX_RING_BUFFER_SIZE         = 0x100000
+        STRIDE_MULTIPLIER           = 12
+
+        self.submodules.tx_recorder = RingRecorder("gtp1_rx", tx_port,
+                                                   TX_RING_BUFFER_BASE_ADDRESS,
+                                                   TX_RING_BUFFER_SIZE,
+                                                   STRIDE_MULTIPLIER)
         self.add_csr("tx_recorder")
 
         tx_cdc = stream.AsyncFIFO([("address", tx_port.address_width), ("data", tx_port.data_width)],
                                   1024, buffered=True)
-        tx_cdc = ClockDomainsRenamer({"write": "gtp1_rx", "read": "sys"})(rx_cdc)
+        tx_cdc = ClockDomainsRenamer({"write": "gtp1_rx", "read": "sys"})(tx_cdc)
         self.submodules.tx_cdc = tx_cdc
 
         self.submodules.tx_dma = LiteDRAMDMAWriter(tx_port)
@@ -390,7 +404,7 @@ class PCIeAnalyzer(SoCSDRAM):
             self.tx_trigger.source.connect(self.tx_recorder.sink),
             self.tx_trigger.enable.eq(self.tx_recorder.enable),
             self.tx_recorder.source.connect(tx_cdc.sink),
-            tx_cdc.source.connect(self.tx_dma.sink),
+            self.tx_cdc.source.connect(self.tx_dma.sink),
         ]
 
         # *********************************************************
@@ -425,7 +439,7 @@ class PCIeAnalyzer(SoCSDRAM):
             self.rx_descrambler.source.data,
             self.rx_descrambler.pattern,
         ]
-
+        
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 4096, clock_domain="gtp0_rx", csr_csv="tools/analyzer.csv")
         self.add_csr("analyzer")
 
