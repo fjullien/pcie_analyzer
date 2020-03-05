@@ -65,6 +65,11 @@ class Recorder:
         self._offset   = getattr(wb.regs, name + "_offset")
         self._trigAddr = getattr(wb.regs, name + "_trigAddr")
 
+        self._base     = getattr(wb.constants, name + "_base")
+        self._length   = getattr(wb.constants, name + "_length")
+        self._nb       = getattr(wb.constants, name + "_nb")
+        self._dw       = getattr(wb.constants, name + "_dw")
+
         self.addr   = 0;
         self.offset = 0;
         self.size   = 0;
@@ -89,6 +94,12 @@ class Recorder:
         self.addr = self._trigAddr.read()
         print("Trigger at 0x{:08x}".format(self.addr))
 
+    def print_config(self):
+        print("RX buffer base address      = 0x{:08x}".format(self._base))
+        print("RX buffer length            = 0x{:08x}".format(self._length))
+        print("RX DMA data width           = {}".format(self._dw))
+        print("Number of agregated records = {}".format(self._nb))
+
     def upload(self):
         base = wb.mems.main_ram.base
         base += self.addr - self.offset
@@ -96,7 +107,9 @@ class Recorder:
         print("Upload of {} bytes from 0x{:08x}...".format(size, base))
         datas = []
         for i in range(size//4):
-            datas.append(wb.read(base + 4*i))
+            addr = base + 4*i
+            val = wb.read(addr)
+            print("{:08x} : {:08x}".format(addr, val))
         return datas
 
 # *********************************************************
@@ -133,6 +146,8 @@ mem_data =    [(0, make_mem_data(0, 0b00, 0x8000)),
 trigger  = Trigger("rx_trigger")
 recorder = Recorder("rx_recorder")
 
+recorder.print_config()
+
 # Load trigger memory
 trigger.configure(mem_data)
 
@@ -145,10 +160,6 @@ recorder.wait()
 recorder.stop()
 
 datas = recorder.upload()
-for data in datas:
-    print("{:08x}".format(data))
-
-
 
 # # #
 
