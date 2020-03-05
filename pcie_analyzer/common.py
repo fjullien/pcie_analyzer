@@ -27,13 +27,15 @@ trigger_layout = [
 #   ("spare"  , 1)   # 
 ]
 
-recorder_layout = [
-    ("data"   , 192), # 24 bytes
-    ("ctrl"   , 24),  # 24 K symbols flag
-    ("trig"   , 12)   # Trigger position indicator
-#   ("spare"  , 12)   # 
-]
+def recorder_layout(nb):
+    payload = [
+        ("data"   , 16 * nb),
+        ("ctrl"   , 2 * nb),
+        ("trig"   , nb)
+    #   ("spare"  , xx)
+    ]
+    return payload
 
-RECORD_DATA = slice(0,192)
-RECORD_CTRL = slice(192,216)
-RECORD_TRIG = slice(216,228)
+#RECORD_DATA = slice(0,192)
+#RECORD_CTRL = slice(192,216)
+#RECORD_TRIG = slice(216,228)

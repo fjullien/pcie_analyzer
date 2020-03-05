@@ -193,8 +193,11 @@ class TB(Module):
         RING_BUFFER_BASE_ADDRESS = 0x1000
         RING_BUFFER_SIZE         = 0x100
 
+        # Number of trigger_layout we want to put in recorder_layout
+        STRIDE_MULTIPLIER        = 12
+
         self.submodules.streamer = PacketStreamer(trigger_layout)
-        self.submodules.recorder = RingRecorder(port, RING_BUFFER_BASE_ADDRESS, RING_BUFFER_SIZE)
+        self.submodules.recorder = RingRecorder("sys", port, RING_BUFFER_BASE_ADDRESS, RING_BUFFER_SIZE, STRIDE_MULTIPLIER)
 
         self.comb += [
             self.streamer.source.connect(self.recorder.sink),
