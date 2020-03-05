@@ -31,6 +31,7 @@ class RingRecorder(Module, AutoCSR):
         self.size     = CSRStorage(32)    # Post trigger size
         self.offset   = CSRStorage(32)    # Trigger offset
         self.trigAddr = CSRStatus(32)     # Trigger storage address
+        self.state    = CSRStatus(3)      # Etats FSM
 
         self.base     = CSRConstant(base)
         self.length   = CSRConstant(length)
@@ -55,6 +56,7 @@ class RingRecorder(Module, AutoCSR):
         _size     = Signal(32)
         _offset   = Signal(32)
         _trigAddr = Signal(32)
+        _state    = Signal(3)
 
         # *********************************************************
         # *                      Constants                        *
@@ -70,6 +72,7 @@ class RingRecorder(Module, AutoCSR):
         self.specials += MultiReg(self.size.storage, _size, clock_domain)
         self.specials += MultiReg(self.offset.storage, _offset, clock_domain)
         self.specials += MultiReg(_trigAddr, self.trigAddr.status, "sys")
+        self.specials += MultiReg(_state, self.state.status, "sys")
 
         # *********************************************************
         # *                     Submodules                        *
@@ -98,6 +101,7 @@ class RingRecorder(Module, AutoCSR):
         self.submodules.fsm = ClockDomainsRenamer(clock_domain)(fsm)
 
         fsm.act("IDLE",
+            _state.eq(0),
             self.fifo.reset.eq(1),
             NextValue(addr, base),
             NextValue(count, 0),
@@ -109,6 +113,7 @@ class RingRecorder(Module, AutoCSR):
         )
 
         fsm.act("FILL_PRE_TRIG",
+            _state.eq(1),
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
@@ -122,6 +127,7 @@ class RingRecorder(Module, AutoCSR):
         )
 
         fsm.act("WAIT_TRIGGER",
+            _state.eq(2),
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
@@ -137,6 +143,7 @@ class RingRecorder(Module, AutoCSR):
         )
 
         fsm.act("FILL_POST_TRIG",
+            _state.eq(3),
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
@@ -152,6 +159,7 @@ class RingRecorder(Module, AutoCSR):
         )
 
         fsm.act("DONE",
+            _state.eq(4),
             NextValue(self.enable, 0),
             NextValue(_finished, 1),
             If(_stop,
