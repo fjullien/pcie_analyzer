@@ -139,6 +139,9 @@ class RingRecorder(Module, AutoCSR):
                     NextValue(_trigAddr, addr),
                     NextState("FILL_POST_TRIG")
                 )
+            ),
+            If(_stop,
+                NextState("ABORT")
             )
         )
 
@@ -155,6 +158,9 @@ class RingRecorder(Module, AutoCSR):
                 If(count == _size,
                     NextState("DONE")
                 )
+            ),
+            If(_stop,
+                NextState("ABORT")
             )
         )
 
@@ -167,3 +173,9 @@ class RingRecorder(Module, AutoCSR):
             )
         )
 
+        fsm.act("ABORT",
+            _state.eq(5),
+            NextValue(self.enable, 0),
+            NextValue(_finished, 1),
+            NextState("IDLE")
+        )
