@@ -136,6 +136,7 @@ class RingRecorder(Module, AutoCSR):
                     NextValue(addr, base),
                 ),
                 If(self.fifo.source.trig != 0,
+                    NextValue(count, 0),
                     NextValue(_trigAddr, addr),
                     NextState("FILL_POST_TRIG")
                 )
