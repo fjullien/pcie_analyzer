@@ -32,6 +32,7 @@ class RingRecorder(Module, AutoCSR):
         self.offset   = CSRStorage(32)    # Trigger offset
         self.trigAddr = CSRStatus(32)     # Trigger storage address
         self.state    = CSRStatus(3)      # Etats FSM
+        self.count    = CSRStatus(32)     # Post trigger bytes count
 
         self.base     = CSRConstant(base)
         self.length   = CSRConstant(length)
@@ -48,7 +49,7 @@ class RingRecorder(Module, AutoCSR):
         # *                      Signals                          *
         # *********************************************************
         addr      = Signal(dram_port.address_width)
-        count     = Signal(32)
+        _count     = Signal(32)
 
         _start    = Signal()
         _stop     = Signal()
@@ -73,6 +74,7 @@ class RingRecorder(Module, AutoCSR):
         self.specials += MultiReg(self.offset.storage, _offset, clock_domain)
         self.specials += MultiReg(_trigAddr, self.trigAddr.status, "sys")
         self.specials += MultiReg(_state, self.state.status, "sys")
+        self.specials += MultiReg(_count, self.count.status, "sys")
 
         # *********************************************************
         # *                     Submodules                        *
@@ -104,7 +106,7 @@ class RingRecorder(Module, AutoCSR):
             _state.eq(0),
             self.fifo.reset.eq(1),
             NextValue(addr, base),
-            NextValue(count, 0),
+            NextValue(_count, 0),
             If(_start,
                 NextValue(_finished, 0),
                 NextValue(self.enable, 1),
@@ -118,9 +120,9 @@ class RingRecorder(Module, AutoCSR):
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
                 NextValue(addr, addr + addrIncr),
-                NextValue(count, count + addrIncr),
-                If(count == _offset,
-                    NextValue(count, 0),
+                NextValue(_count, _count + addrIncr),
+                If(_count == _offset,
+                    NextValue(_count, 0),
                     NextState("WAIT_TRIGGER")
                 )
             )
@@ -136,7 +138,7 @@ class RingRecorder(Module, AutoCSR):
                     NextValue(addr, base),
                 ),
                 If(self.fifo.source.trig != 0,
-                    NextValue(count, 0),
+                    NextValue(_count, 0),
                     NextValue(_trigAddr, addr),
                     NextState("FILL_POST_TRIG")
                 )
@@ -155,8 +157,8 @@ class RingRecorder(Module, AutoCSR):
                 If(addr == (base + length - addrIncr),
                     NextValue(addr, base),
                 ),
-                NextValue(count, count + addrIncr),
-                If(count == _size,
+                NextValue(_count, _count + addrIncr),
+                If(_count == _size,
                     NextState("DONE")
                 )
             ),
