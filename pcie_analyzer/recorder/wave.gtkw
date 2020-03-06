@@ -1,37 +1,47 @@
 [*]
 [*] GTKWave Analyzer v3.3.86 (w)1999-2017 BSI
-[*] Mon Mar  2 09:05:47 2020
+[*] Fri Mar  6 14:54:58 2020
 [*]
 [dumpfile] "/home/odyssee/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/recorder/sim.vcd"
-[dumpfile_mtime] "Mon Mar  2 09:04:50 2020"
-[dumpfile_size] 1711713
+[dumpfile_mtime] "Fri Mar  6 14:54:24 2020"
+[dumpfile_size] 3593081
 [savefile] "/home/odyssee/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/recorder/wave.gtkw"
 [timestart] 0
 [size] 1920 1120
 [pos] -1 -1
-*-10.748365 4912 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
-[sst_width] 498
-[signals_width] 374
+*-13.000000 9970 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 580
+[signals_width] 406
 [sst_expanded] 1
 [sst_vpaned_height] 335
 @22
 [color] 2
-sink_sink_payload_data[15:0]
+rx_recorder_sink_sink_payload_data[15:0]
 @28
 [color] 2
-sink_sink_payload_ctrl[1:0]
-[color] 2
-sink_sink_payload_trig
-@22
-stride_source_payload_data[191:0]
-stride_source_payload_ctrl[23:0]
-stride_source_payload_trig[11:0]
+rx_recorder_sink_sink_payload_trig
+@200
+-RX_RECORDER
 @820
 [color] 3
-state[111:0]
+ringrecorder0_next_state[127:0]
 @22
-trigAddr[31:0]
-@23
-addr[31:0]
+rx_recorder_source_source_payload_address[31:0]
+rx_recorder_source_source_payload_data[255:0]
+@28
+rx_recorder_enable
+@29
+rx_recorder_force1
+@200
+-TX_RECORDER
+@820
+[color] 3
+ringrecorder1_next_state[127:0]
+@22
+tx_recorder_source_source_payload_data[255:0]
+tx_recorder_source_source_payload_address[31:0]
+@28
+tx_recorder_force1
+tx_recorder_enable
 [pattern_trace] 1
 [pattern_trace] 0

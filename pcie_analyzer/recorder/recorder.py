@@ -39,7 +39,8 @@ class RingRecorder(Module, AutoCSR):
         self.nb       = CSRConstant(nb)
         self.dw       = CSRConstant(dram_port.data_width)
 
-        self.enable   = Signal()
+        self.enable   = Signal()          # Signal to enable the trigger
+        self.force    = Signal()          # Another recorder ask us to record datas
 
         self.source = source = stream.Endpoint([("address", dram_port.address_width),
                                                 ("data", dram_port.data_width)])
@@ -49,8 +50,8 @@ class RingRecorder(Module, AutoCSR):
         # *                      Signals                          *
         # *********************************************************
         addr      = Signal(dram_port.address_width)
-        _count     = Signal(32)
-
+        
+        _count    = Signal(32)
         _start    = Signal()
         _stop     = Signal()
         _finished = Signal()
@@ -58,6 +59,7 @@ class RingRecorder(Module, AutoCSR):
         _offset   = Signal(32)
         _trigAddr = Signal(32)
         _state    = Signal(3)
+        _force    = Signal()
 
         # *********************************************************
         # *                      Constants                        *
@@ -75,6 +77,7 @@ class RingRecorder(Module, AutoCSR):
         self.specials += MultiReg(_trigAddr, self.trigAddr.status, "sys")
         self.specials += MultiReg(_state, self.state.status, "sys")
         self.specials += MultiReg(_count, self.count.status, "sys")
+        self.specials += MultiReg(self.force, _force, clock_domain)
 
         # *********************************************************
         # *                     Submodules                        *
@@ -111,7 +114,12 @@ class RingRecorder(Module, AutoCSR):
                 NextValue(_finished, 0),
                 NextValue(self.enable, 1),
                 NextState("FILL_PRE_TRIG")
-            )
+            ),
+            If(_force,
+                NextValue(_finished, 0),
+                NextValue(self.enable, 1),
+                NextState("FORCED")
+            ),
         )
 
         fsm.act("FILL_PRE_TRIG",
@@ -181,4 +189,21 @@ class RingRecorder(Module, AutoCSR):
             NextValue(self.enable, 0),
             NextValue(_finished, 1),
             NextState("IDLE")
+        )
+
+        fsm.act("FORCED",
+            _state.eq(6),
+            source.valid.eq(self.fifo.source.valid),
+            self.fifo.source.ready.eq(source.ready),
+            If(source.valid & source.ready,
+                NextValue(addr, addr + addrIncr),
+                If(addr == (base + length - addrIncr),
+                    NextValue(addr, base),
+                ),
+            ),
+            If(_force == 0,
+                NextValue(self.enable, 0),
+                NextValue(_finished, 1),
+                NextState("IDLE"),
+            )
         )

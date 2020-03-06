@@ -168,9 +168,11 @@ data = [
 data_list = []
 
 def fill_data_list():
-    for i in range(800):
+    for i in range(2000):
         trig = 0
-        if i == 180:
+        if i == 250:
+            trig = 1
+        if i == 1200:
             trig = 1
         data_list.append(make_data(trig, 0b11, i))
 
@@ -190,17 +192,25 @@ class TB(Module):
 
         port = DummyPort(32, 256)
 
-        RING_BUFFER_BASE_ADDRESS = 0x1000
-        RING_BUFFER_SIZE         = 0x100
+        RX_RING_BUFFER_BASE_ADDRESS = 0
+        RX_RING_BUFFER_SIZE         = 0x1000
+
+        TX_RING_BUFFER_BASE_ADDRESS = 0x1000
+        TX_RING_BUFFER_SIZE         = 0x1000
 
         # Number of trigger_layout we want to put in recorder_layout
         STRIDE_MULTIPLIER        = 12
 
-        self.submodules.streamer = PacketStreamer(trigger_layout)
-        self.submodules.recorder = RingRecorder("sys", port, RING_BUFFER_BASE_ADDRESS, RING_BUFFER_SIZE, STRIDE_MULTIPLIER)
+        self.submodules.rx_streamer = PacketStreamer(trigger_layout)
+        self.submodules.rx_recorder = RingRecorder("sys", port, RX_RING_BUFFER_BASE_ADDRESS, RX_RING_BUFFER_SIZE, STRIDE_MULTIPLIER)
+        self.submodules.tx_streamer = PacketStreamer(trigger_layout)
+        self.submodules.tx_recorder = RingRecorder("sys", port, TX_RING_BUFFER_BASE_ADDRESS, TX_RING_BUFFER_SIZE, STRIDE_MULTIPLIER)
 
         self.comb += [
-            self.streamer.source.connect(self.recorder.sink),
+            self.rx_streamer.source.connect(self.rx_recorder.sink),
+            self.tx_streamer.source.connect(self.tx_recorder.sink),
+            self.tx_recorder.force.eq(self.rx_recorder.enable),
+            self.rx_recorder.force.eq(self.tx_recorder.enable),
         ]
 
 # *********************************************************
@@ -214,27 +224,39 @@ def main_generator(dut):
     fill_data_list()
 
     packet = Packet(data_list)
-    dut.streamer.send(packet)
+    dut.rx_streamer.send(packet)
+    dut.tx_streamer.send(packet)
 
-    yield from dut.recorder.offset.write(4)
+    yield from dut.rx_recorder.offset.write(0x200)
+    yield from dut.rx_recorder.size.write(0x100)
+
+    yield from dut.tx_recorder.offset.write(0xc0)
+    yield from dut.tx_recorder.size.write(0x100)
+
+    yield dut.tx_recorder.source.ready.eq(1)
 
     delay = 0
 
-    for i in range(1000):
+    for i in range(1500):
         if i == 20:
-            yield from dut.recorder.start.write(1)
+            yield from dut.rx_recorder.start.write(1)
             
         if (i > 150) and (i < 200):
-            yield dut.recorder.source.ready.eq(0)
+            yield dut.rx_recorder.source.ready.eq(0)
         else:
-            yield dut.recorder.source.ready.eq(1)
+            yield dut.rx_recorder.source.ready.eq(1)
 
-        if (yield dut.recorder.finished.status):
+        if (yield dut.rx_recorder.finished.status):
             delay = delay + 1
             if (delay == 100):
-                yield from dut.recorder.stop.write(1)
-            if (delay == 150):
-                yield from dut.recorder.start.write(1)
+                yield from dut.rx_recorder.stop.write(1)
+
+        if i == 1000:
+            yield from dut.tx_recorder.start.write(1)
+        if (yield dut.tx_recorder.finished.status):
+            delay = delay + 1
+            if (delay == 100):
+                yield from dut.tx_recorder.stop.write(1)
 
         yield
 
@@ -248,7 +270,8 @@ if __name__ == "__main__":
     tb = TB()
     generators = {
         "sys" :   [main_generator(tb),
-                   tb.streamer.generator()]
+                   tb.rx_streamer.generator(),
+                   tb.tx_streamer.generator()]
     }
     clocks = {"sys": 10}
 
