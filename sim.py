@@ -215,7 +215,6 @@ class PCIeAnalyzer(SoCSDRAM):
             self.rx_trigger.enable.eq(self.rx_recorder.enable),
 
             self.rx_recorder.source.connect(self.rx_cdc.sink),
-            self.rx_recorder.force.eq(self.tx_recorder.enable),
 
             self.rx_cdc.source.connect(self.rx_dma.sink),
         ]
@@ -241,9 +240,16 @@ class PCIeAnalyzer(SoCSDRAM):
             self.tx_trigger.enable.eq(self.tx_recorder.enable),
 
             self.tx_recorder.source.connect(self.tx_cdc.sink),
-            self.tx_recorder.force.eq(self.rx_recorder.enable),
 
             self.tx_cdc.source.connect(self.tx_dma.sink),
+        ]
+
+        # *********************************************************
+        # *                 Recorder RX/TX                        *
+        # *********************************************************
+        self.comb += [
+            self.tx_recorder.force.eq(self.rx_recorder.enable),
+            self.rx_recorder.force.eq(self.tx_recorder.enable),
         ]
 
 # *********************************************************
