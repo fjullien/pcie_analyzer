@@ -150,7 +150,8 @@ class PCIeAnalyzer(SoCSDRAM):
         # *        Ordered Sets Detector / Descrambler RX         *
         # *********************************************************
         self.submodules.rx_detector    = DetectOrderedSets()
-        self.submodules.rx_descrambler = Descrambler(test_pattern=True)
+        self.submodules.rx_descrambler = Descrambler("sys")
+        self.add_csr("rx_descrambler")
 
         self.comb += [
             #self.gtp0.source.connect(self.rx_detector.sink, omit={"valid"}),
@@ -162,7 +163,9 @@ class PCIeAnalyzer(SoCSDRAM):
         # *        Ordered Sets Detector / Descrambler TX         *
         # *********************************************************
         self.submodules.tx_detector    = DetectOrderedSets()
-        self.submodules.tx_descrambler = Descrambler(test_pattern=True)
+        self.submodules.tx_descrambler = Descrambler("sys")
+        self.add_csr("tx_descrambler")
+
         self.comb += [
             #self.gtp1.source.connect(self.tx_detector.sink, omit={"valid"}),
             self.tx_detector.sink.valid.eq(1),

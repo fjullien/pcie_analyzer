@@ -181,7 +181,7 @@ class _CRG(Module):
 # *********************************************************
 
 class PCIeAnalyzer(SoCSDRAM):
-    def __init__(self, platform, connector="pcie", linerate=2.5e9, test_pattern=True):
+    def __init__(self, platform, connector="pcie", linerate=2.5e9):
         assert connector in ["pcie"]
         sys_clk_freq = int(50e6)
 
@@ -307,7 +307,8 @@ class PCIeAnalyzer(SoCSDRAM):
         self.specials += MultiReg(qpll.lock & self.gtp0.rx_ready, gtp0_ready, "gtp0_rx")
 
         self.submodules.rx_detector   = ClockDomainsRenamer("gtp0_rx")(DetectOrderedSets())
-        self.submodules.rx_descrambler = ClockDomainsRenamer("gtp0_rx")(Descrambler(test_pattern))
+        self.submodules.rx_descrambler = Descrambler("gtp0_rx")
+        self.add_csr("rx_descrambler")
 
         self.comb += [
             self.gtp0.source.connect(self.rx_detector.sink, omit={"valid"}),
@@ -322,7 +323,9 @@ class PCIeAnalyzer(SoCSDRAM):
         self.specials += MultiReg(qpll.lock & self.gtp1.rx_ready, gtp1_ready, "gtp1_rx")
 
         self.submodules.tx_detector    = ClockDomainsRenamer("gtp1_rx")(DetectOrderedSets())
-        self.submodules.tx_descrambler = ClockDomainsRenamer("gtp1_rx")(Descrambler(test_pattern))
+        self.submodules.tx_descrambler = Descrambler("gtp1_rx")
+        self.add_csr("tx_descrambler")
+
         self.comb += [
             self.gtp1.source.connect(self.tx_detector.sink, omit={"valid"}),
             self.tx_detector.sink.valid.eq(gtp1_ready),
@@ -437,7 +440,7 @@ class PCIeAnalyzer(SoCSDRAM):
             self.rx_recorder.source.ready,
             self.rx_recorder.source.valid,
             self.rx_descrambler.source.data,
-            self.rx_descrambler.pattern,
+            self.rx_trigger.fsm
         ]
         
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 4096, clock_domain="gtp0_rx", csr_csv="tools/analyzer.csv")
@@ -468,7 +471,7 @@ def main():
     if "load" in sys.argv[1:]:
         load()
     platform = Platform()
-    soc     = PCIeAnalyzer(platform, test_pattern=True)
+    soc     = PCIeAnalyzer(platform)
     builder = Builder(soc, output_dir="build", csr_csv="tools/csr.csv")
     builder.build(build_name="ac701")
 

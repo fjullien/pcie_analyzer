@@ -20,9 +20,16 @@ def make_mem_data(dc, ctrl, data):
 
 # *********************************************************
 # *                                                       *
-# *                  Trigger control                      *
+# *                Descrambler control                    *
 # *                                                       *
 # *********************************************************
+
+class Descrambler:
+    def __init__(self, name):
+        self._testmode   = getattr(wb.regs, name + "_testmode")
+
+    def enableTestMode(self, value):
+        self._testmode.write(value)
 
 # *********************************************************
 # *                                                       *
@@ -143,10 +150,14 @@ mem_data =    [(0, make_mem_data(0, 0b00, 0x8000)),
 #val = wb.read(wb.mems.main_ram.base + 4)
 #print("{:08x}".format(val))
 
+descrambler = Descrambler("rx_descrambler")
 trigger  = Trigger("rx_trigger")
 recorder = Recorder("rx_recorder")
 
 recorder.print_config()
+
+# Descambler in test mode
+descrambler.enableTestMode(1)
 
 # Load trigger memory
 trigger.configure(mem_data)

@@ -2,7 +2,9 @@
 # License: BSD
 
 from migen import *
+from migen.genlib.cdc import *
 
+from litex.soc.interconnect.csr import *
 from litex.soc.interconnect import stream
 
 from enum import IntEnum
@@ -322,7 +324,7 @@ class DetectOrderedSets(Module):
 # *                                                       *
 # *********************************************************
 
-class Descrambler(Module):
+class Descrambler(Module, AutoCSR):
     """Descrambler
 
     This module descrambles the RX data/ctrl stream. K codes and TS1/TS2 data shall not be descrambled.
@@ -330,41 +332,108 @@ class Descrambler(Module):
     when COM characters are seen.
     """
 
-    def __init__(self, test_pattern=False):
+    def __init__(self, clock_domain):
+
+        # *********************************************************
+        # *                    Interface                          *
+        # *********************************************************
+        self.testmode = CSRStorage()       # Enable test mode (use pattern)
+        
         self.sink   =   sink = stream.Endpoint(descrambler_layout)
         self.source = source = stream.Endpoint(descrambler_layout)
 
-        # # #
-
+        # *********************************************************
+        # *                    Constants                          *
+        # *********************************************************
         LFSR_VALUE_NEXT_AFTER_RESET = 0xE817
         LFSR_VALUE_RESET = 0xFFFF
 
+        # *********************************************************
+        # *                     Signals                           *
+        # *********************************************************
         self.pattern = Signal(16)
+        _testmode    = Signal()
 
+        # *********************************************************
+        # *                         CDC                           *
+        # *********************************************************
+        self.specials += MultiReg(self.testmode.storage, _testmode, clock_domain)
+
+        # *********************************************************
+        # *                     Submodules                        *
+        # *********************************************************
         self.submodules.lfsr = lfsr()
 
-        if(test_pattern is False):
-            self.sync += [
+        # *********************************************************
+        # *                    Synchronous                        *
+        # *********************************************************
+        sync = getattr(self.sync, clock_domain)
+        sync += [
+
+            self.source.type.eq(self.sink.type),
+            self.source.ctrl.eq(self.sink.ctrl),
+            self.source.osets.eq(self.sink.osets),
     
-                self.source.type.eq(self.sink.type),
-                self.source.ctrl.eq(self.sink.ctrl),
-                self.source.osets.eq(self.sink.osets),
+            If(self.sink.ctrl == 0b00,
     
-                If(self.sink.ctrl == 0b00,
+                *[self.source.data[i+8].eq(self.sink.data[i+8] ^ self.lfsr.value[15-i]) for i in range(8)],
+                *[self.source.data[i].eq(self.sink.data[i]     ^ self.lfsr.next1[15-i]) for i in range(8)],
     
-                    *[self.source.data[i+8].eq(self.sink.data[i+8] ^ self.lfsr.value[15-i]) for i in range(8)],
-                    *[self.source.data[i].eq(self.sink.data[i]     ^ self.lfsr.next1[15-i]) for i in range(8)],
+                self.lfsr.value.eq(self.lfsr.next2)
+            ),
     
-                    self.lfsr.value.eq(self.lfsr.next2)
-                ),
+            If(self.sink.ctrl == 0b01,
     
-                If(self.sink.ctrl == 0b01,
+                # First byte is a DATA
+                *[self.source.data[i+8].eq(self.sink.data[i+8] ^ self.lfsr.value[15-i]) for i in range(8)],
     
-                    # First byte is a DATA
-                    *[self.source.data[i+8].eq(self.sink.data[i+8] ^ self.lfsr.value[15-i]) for i in range(8)],
+                # Second byte is not scrambled
+                self.source.data[LOWER_BYTE].eq(self.sink.data[LOWER_BYTE]),
     
-                    # Second byte is not scrambled
-                    self.source.data[LOWER_BYTE].eq(self.sink.data[LOWER_BYTE]),
+                # Second byte is a COMMA
+                If(self.sink.data[LOWER_BYTE] == K(28, 5),
+                    self.lfsr.value.eq(LFSR_VALUE_RESET)
+    
+                # Second byte is a SKIP
+                ).Else(If(self.sink.data[LOWER_BYTE] == K(28, 0),
+                        self.lfsr.value.eq(self.lfsr.next1),
+    
+                # Second byte is another K symbol
+                ).Else(
+                        self.lfsr.value.eq(self.lfsr.next2),
+                ))
+            ),
+    
+            If(self.sink.ctrl == 0b10,
+    
+                # Second byte is a DATA
+                *[self.source.data[i].eq(self.sink.data[i] ^ self.lfsr.value[15-i]) for i in range(8)],
+    
+                # First byte is not scrambled
+                self.source.data[UPPER_BYTE].eq(self.sink.data[UPPER_BYTE]),
+    
+                # First byte is a COMMA
+                If(self.sink.data[UPPER_BYTE] == K(28, 5),
+                    self.source.data[LOWER_BYTE].eq(self.sink.data[LOWER_BYTE] ^ 0xFF),
+                    self.lfsr.value.eq(LFSR_VALUE_NEXT_AFTER_RESET)
+    
+                # First byte is a SKIP
+                ).Else(If(self.sink.data[UPPER_BYTE] == K(28, 0),
+                        self.lfsr.value.eq(self.lfsr.next1),
+    
+                # First byte is another K symbol
+                ).Else(
+                        self.lfsr.value.eq(self.lfsr.next2),
+                ))
+            ),
+    
+            If(self.sink.ctrl == 0b11,
+    
+                # First and sedcond byte are not scrambled
+                self.source.data.eq(self.sink.data),
+    
+                # First byte is a COMMA
+                If(self.sink.data[UPPER_BYTE] == K(28, 5),
     
                     # Second byte is a COMMA
                     If(self.sink.data[LOWER_BYTE] == K(28, 5),
@@ -372,108 +441,67 @@ class Descrambler(Module):
     
                     # Second byte is a SKIP
                     ).Else(If(self.sink.data[LOWER_BYTE] == K(28, 0),
-                            self.lfsr.value.eq(self.lfsr.next1),
+                            self.lfsr.value.eq(LFSR_VALUE_RESET)
     
                     # Second byte is another K symbol
                     ).Else(
-                            self.lfsr.value.eq(self.lfsr.next2),
+                            self.lfsr.value.eq(LFSR_VALUE_NEXT_AFTER_RESET)
                     ))
                 ),
     
-                If(self.sink.ctrl == 0b10,
+                # First byte is a SKIP
+                If(self.sink.data[UPPER_BYTE] == K(28, 0),
     
-                    # Second byte is a DATA
-                    *[self.source.data[i].eq(self.sink.data[i] ^ self.lfsr.value[15-i]) for i in range(8)],
+                    # Second byte is a COMMA
+                    If(self.sink.data[LOWER_BYTE] == K(28, 5),
+                        self.lfsr.value.eq(LFSR_VALUE_RESET)
     
-                    # First byte is not scrambled
-                    self.source.data[UPPER_BYTE].eq(self.sink.data[UPPER_BYTE]),
+                    # Second byte is a SKIP
+                    ).Else(If((self.sink.data[LOWER_BYTE] != K(28, 5)) & (self.sink.data[LOWER_BYTE] != K(28, 0)),
+                            self.lfsr.value.eq(self.lfsr.next1)
+                    ))
+                ),
     
-                    # First byte is a COMMA
-                    If(self.sink.data[UPPER_BYTE] == K(28, 5),
-                        self.source.data[LOWER_BYTE].eq(self.sink.data[LOWER_BYTE] ^ 0xFF),
-                        self.lfsr.value.eq(LFSR_VALUE_NEXT_AFTER_RESET)
+                # First byte is not a SKIP or a COMMA
+                If((self.sink.data[UPPER_BYTE] != K(28, 5)) & (self.sink.data[UPPER_BYTE] != K(28, 0)),
     
-                    # First byte is a SKIP
-                    ).Else(If(self.sink.data[UPPER_BYTE] == K(28, 0),
-                            self.lfsr.value.eq(self.lfsr.next1),
+                    # Second byte is a COMMA
+                    If(self.sink.data[LOWER_BYTE] == K(28, 5),
+                        self.lfsr.value.eq(LFSR_VALUE_RESET)
     
-                    # First byte is another K symbol
+                    # Second byte is a SKIP
+                    ).Else(If(self.sink.data[LOWER_BYTE] == K(28, 0),
+                            self.lfsr.value.eq(self.lfsr.next1)
+    
+                    # Second byte is another K symbol
                     ).Else(
-                            self.lfsr.value.eq(self.lfsr.next2),
+                        self.lfsr.value.eq(self.lfsr.next2)
                     ))
-                ),
-    
-                If(self.sink.ctrl == 0b11,
-    
-                    # First and sedcond byte are not scrambled
-                    self.source.data.eq(self.sink.data),
-    
-                    # First byte is a COMMA
-                    If(self.sink.data[UPPER_BYTE] == K(28, 5),
-    
-                        # Second byte is a COMMA
-                        If(self.sink.data[LOWER_BYTE] == K(28, 5),
-                            self.lfsr.value.eq(LFSR_VALUE_RESET)
-    
-                        # Second byte is a SKIP
-                        ).Else(If(self.sink.data[LOWER_BYTE] == K(28, 0),
-                                self.lfsr.value.eq(LFSR_VALUE_RESET)
-    
-                        # Second byte is another K symbol
-                        ).Else(
-                                self.lfsr.value.eq(LFSR_VALUE_NEXT_AFTER_RESET)
-                        ))
-                    ),
-    
-                    # First byte is a SKIP
-                    If(self.sink.data[UPPER_BYTE] == K(28, 0),
-    
-                        # Second byte is a COMMA
-                        If(self.sink.data[LOWER_BYTE] == K(28, 5),
-                            self.lfsr.value.eq(LFSR_VALUE_RESET)
-    
-                        # Second byte is a SKIP
-                        ).Else(If((self.sink.data[LOWER_BYTE] != K(28, 5)) & (self.sink.data[LOWER_BYTE] != K(28, 0)),
-                                self.lfsr.value.eq(self.lfsr.next1)
-                        ))
-                    ),
-    
-                    # First byte is not a SKIP or a COMMA
-                    If((self.sink.data[UPPER_BYTE] != K(28, 5)) & (self.sink.data[UPPER_BYTE] != K(28, 0)),
-    
-                        # Second byte is a COMMA
-                        If(self.sink.data[LOWER_BYTE] == K(28, 5),
-                            self.lfsr.value.eq(LFSR_VALUE_RESET)
-    
-                        # Second byte is a SKIP
-                        ).Else(If(self.sink.data[LOWER_BYTE] == K(28, 0),
-                                self.lfsr.value.eq(self.lfsr.next1)
-    
-                        # Second byte is another K symbol
-                        ).Else(
-                            self.lfsr.value.eq(self.lfsr.next2)
-                        ))
-                    )
-                ),
-            ]
+                )
+            ),
+        ]
 
-            self.sync += [
-                If(self.sink.osets[0],
-                    self.source.data[LOWER_BYTE].eq(self.sink.data[LOWER_BYTE])
-                ),
+        sync += [
+            If(self.sink.osets[0],
+                self.source.data[LOWER_BYTE].eq(self.sink.data[LOWER_BYTE])
+            ),
 
-                If(self.sink.osets[1],
-                    self.source.data[UPPER_BYTE].eq(self.sink.data[UPPER_BYTE])
-                ),
-            ]
+            If(self.sink.osets[1],
+                self.source.data[UPPER_BYTE].eq(self.sink.data[UPPER_BYTE])
+            ),
+        ]
 
-        else:
-            self.sync += [
+        sync += [
+            If(_testmode,
                 self.source.data.eq(self.pattern),
                 self.pattern.eq(self.pattern + 1),
                 self.source.ctrl.eq(0b00),
-            ]
+            )
+        ]
 
+        # *********************************************************
+        # *                    Combinatorial                      *
+        # *********************************************************
         self.comb += [
             self.source.valid.eq(self.sink.valid & self.source.ready),
             self.sink.ready.eq(1),
