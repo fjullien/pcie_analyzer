@@ -108,6 +108,47 @@ class lfsr(Module):
 # *                                                       *
 # *********************************************************
 
+# +----------+--------+------------+-------+---------------------------------------+
+# | Encoding | Symbol | Name       | Value | Description                           |
+# +--------------------------------------------------------------------------------+
+# |  K28.5   | COM    | Comma      | 0xBC  | Used for Lane and Link initialization |
+# |          |        |            |       | and management                        |
+# +--------------------------------------------------------------------------------+
+# |  K27.7   | STP    | Start TlP  | 0xFB  | Marks the start of a Transaction      |
+# |          |        |            |       | Layer Packet                          |
+# +--------------------------------------------------------------------------------+
+# |  K28.2   | SDP    | Start DllP | 0x5C  | Marks the start of a Data Link Layer  |
+# |          |        |            |       | Packet                                |
+# +--------------------------------------------------------------------------------+
+# |  K29.7   | END    | End        | 0xFD  | Marks the end of a Transaction Layer  |
+# |          |        |            |       | Packet or a Data Link Layer Packet    |
+# +--------------------------------------------------------------------------------+
+# |  K30.7   | EDB    | EnD Bad    | 0xFE  | Marks the end of a nullified TLP      |
+# +--------------------------------------------------------------------------------+
+# |  K23.7   | PAD    | Pad        | 0xF7  | Used in Framing and Link Width and    |
+# |          |        |            |       | Lane ordering negotiations            |
+# +--------------------------------------------------------------------------------+
+# |  K28.0   | SKP    | Skip       | 0x1C  | Used for compensating for different   |
+# |          |        |            |       | bit rates for two communicating Ports |
+# +--------------------------------------------------------------------------------+
+# |  K28.1   | FTS    | Fast Train | 0x3C  | Used within an Ordered Set to exit    |
+# |          |        | Sequence   |       | from L0s to L0                        |
+# +--------------------------------------------------------------------------------+
+# |  K28.3   | IDL    | Idle       | 0x7C  | Used in the Electrical Idle Ordered   |
+# |          |        |            |       | Set (EIOS)                            |
+# +--------------------------------------------------------------------------------+
+# |  K28.4   |        |            | 0x9C  | Reserved                              |
+# +--------------------------------------------------------------------------------+
+# |  K28.6   |        |            | 0xDC  | Reserved                              |
+# +--------------------------------------------------------------------------------+
+# |  K28.7   | EIE    | Electrical | 0xFC  | Reserved in 2.5 GT/s                  |
+# |          |        | Idle Exit  |       | Used in the Electrical Idle Exit      |
+# |          |        |            |       | Ordered Set (EIEOS) and sent prior    |
+# |          |        |            |       | to sending FTS at data rates other    |
+# |          |        |            |       | than 2.5 GT/s                         |
+# +----------+--------+------------+-------+---------------------------------------+
+
+
 class DetectOrderedSets(Module):
     """DetectOrderedSets
 
@@ -115,11 +156,17 @@ class DetectOrderedSets(Module):
     """
 
     def __init__(self):
+
+        # *********************************************************
+        # *                    Interface                          *
+        # *********************************************************
         self.source = source = stream.Endpoint(descrambler_layout)
         self.sink   = sink   = stream.Endpoint([("data", 16), ("ctrl", 2)])
 
-        # # #
 
+        # *********************************************************
+        # *                     Signals                           *
+        # *********************************************************
         osets_pattern = Signal(16)
 
         self.word0 = Signal(18)
@@ -133,6 +180,9 @@ class DetectOrderedSets(Module):
         self.word8 = Signal(18)
         self.word9 = Signal(18)
 
+        # *********************************************************
+        # *                    Synchronous                        *
+        # *********************************************************
         self.sync += [
 
             # Generates osets bits during ordered sets detection
@@ -306,6 +356,9 @@ class DetectOrderedSets(Module):
             )
         ]
 
+        # *********************************************************
+        # *                    Combinatorial                      *
+        # *********************************************************
         self.comb += [
             self.source.valid.eq(self.sink.valid),
             self.sink.ready.eq(1),
