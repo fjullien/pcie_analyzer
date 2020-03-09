@@ -49,7 +49,7 @@ data = [
     make_data(0, 0, 0, 0x0000),
     make_data(0, 0, 3, 0xbc1c),
     make_data(0, 0, 3, 0x1c1c),
-    make_data(0, 0, 0, 0x0000),
+    make_data(0, 0, 0, 0xAABB),
     make_data(0, 0, 0, 0x0000),
     make_data(0, 0, 0, 0x0000),
     make_data(0, 0, 0, 0x0000),
@@ -64,21 +64,21 @@ data = [
     make_data(0, 0, 0, 0x0000),
     make_data(0, 0, 1, 0x00bc),
     make_data(0, 0, 3, 0x1c1c),
-    make_data(0, 0, 3, 0xbc1c),
-    make_data(0, 0, 3, 0x1c1c),
+    make_data(0, 0, 2, 0x1c00),
+    make_data(0, 0, 0, 0xbb1c),
     make_data(0, 0, 0, 0x0000),
     make_data(0, 0, 0, 0x0000),
 ]
 
-#  data       ------------------------------+
-#  ctrl       -----------------------+      |
-#  don't care -------------------+   |      |
-#  address    --+                |   |      |
-#               |                |   |      |
-#               v                v   v      v
-mem_data =    [(0, make_mem_data(0, 0b11, 0xbc1c)),
-               (1, make_mem_data(0, 0b11, 0x1c1c)),
-               (2, make_mem_data(0, 0b00, 0x0000)),
+#  data       ---------------------------------+
+#  ctrl       --------------------------+      |
+#  don't care ----------------------+   |      |
+#  address    --+                   |   |      |
+#               |                   |   |      |
+#               v                   v   v      v
+mem_data =    [(0, make_mem_data(0b01, 0b11, 0xbc1c)),
+               (1, make_mem_data(0b11, 0b11, 0x1c1c)),
+               (2, make_mem_data(0b11, 0b00, 0x00BB)),
 ]
 
 # *********************************************************
