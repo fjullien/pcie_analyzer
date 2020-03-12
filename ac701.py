@@ -144,6 +144,8 @@ _io = [
 class Platform(XilinxPlatform):
     def __init__(self):
         XilinxPlatform.__init__(self, "xc7a200t-fbg676-2", _io, toolchain="vivado")
+        self.toolchain.bitstream_commands = ["set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 4 [current_design]"]
+        self.toolchain.additional_commands = ["write_cfgmem -force -format MCS -size 32 -interface SPIx4 -loadbit \"up 0x0 {build_name}.bit\" -file {build_name}.mcs"]
 
 # *********************************************************
 # *                                                       *
@@ -477,11 +479,20 @@ def load():
     prog.load_bitstream("build/gateware/ac701.bit")
     exit()
 
+
+def flash():
+    from litex.build.xilinx import VivadoProgrammer
+    prog = VivadoProgrammer(flash_part="mt25ql256-spi-x1_x2_x4")
+    prog.flash(0, "build/gateware/ac701.mcs")
+    exit()
+
 # Build --------------------------------------------------------------------------------------------
 
 def main():
     if "load" in sys.argv[1:]:
         load()
+    if "flash" in sys.argv[1:]:
+        flash()
     platform = Platform()
     soc     = PCIeAnalyzer(platform)
     builder = Builder(soc, output_dir="build", csr_csv="tools/csr.csv")
