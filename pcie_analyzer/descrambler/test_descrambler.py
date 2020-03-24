@@ -78,7 +78,7 @@ class TB(Module):
     def __init__(self):
         self.submodules.streamer = PacketStreamer([("data", 18)])
 
-        self.submodules.descrambler = Descrambler()
+        self.submodules.descrambler = Descrambler("sys")
         self.submodules.detect = DetectOrderedSets()
 
         self.comb += [
