@@ -45,7 +45,8 @@ class Aligner(Module):
         type0     = Signal(4)
         type1     = Signal(4)
 
-        unaligned = Signal()
+        unaligned   = Signal()
+        unaligned_d = Signal()
 
         # *********************************************************
         # *                      Constants                        *
@@ -60,6 +61,9 @@ class Aligner(Module):
         # *********************************************************
         self.comb += [
             self.sink.ready.eq(1),
+            If(ctrl0 == 0b01 & (check_ctrl_only | data0[0:8] == COM.value),
+                unaligned.eq(1)
+            )
         ]
 
         # *********************************************************
@@ -75,16 +79,13 @@ class Aligner(Module):
             type0.eq(self.sink.type),
             type1.eq(type0),
 
-            unaligned.eq(0),
             If(self.enable,
                 If((ctrl0 != 0) & (ctrl1 == 0),
-                    If(ctrl0 == 0b01 & (check_ctrl_only | data0[0:8] == COM.value),
-                        unaligned.eq(1)
-                    )
+                    unaligned_d.eq(unaligned)
                 ),
             ),
 
-            If(unaligned,
+            If(unaligned_d,
                 self.source.data.eq(Cat(data0[8:16],data1[0:8])),
                 self.source.ctrl.eq(Cat(ctrl0[1],ctrl1[0])),
                 self.source.osets.eq(Cat(osets0[1],osets1[0])),
