@@ -69,7 +69,8 @@ filter_fifo_layout = [
     ("ctrl" , 2),
     ("osets", 2),
     ("type" , 4),
-    ("ts"   , 32)
+    ("ts"   , 32),
+    ("error", 1),
 ]
 
 # *********************************************************
@@ -139,7 +140,7 @@ class Filter(Module, AutoCSR):
         # *********************************************************
         self.comb += [
             sink.connect(buf0.sink),
-            buf0.source.connect(fifo.sink, omit={"valid", "ts"}),
+            buf0.source.connect(fifo.sink, omit={"valid", "ts", "error"}),
             self.sink.ready.eq(1),
 
             skipEnabled.eq(_filterConfig[0]),
@@ -182,6 +183,7 @@ class Filter(Module, AutoCSR):
         # *********************************************************
         fsmWriter.act("FIND_DELIMITER",
             NextValue(fifo.sink.valid, 0),
+            NextValue(fifo.sink.error, 0),
 
             If(sink.osets & (sink.data[8:16] == COM.value),
                 NextValue(fifo.sink.valid, 1),
@@ -189,13 +191,13 @@ class Filter(Module, AutoCSR):
                 NextState("ORDERED_SETS"),
             ),
 
-            If(sink.ctrl[1] & (sink.data[8:16] == STP.value),
+            If((sink.ctrl == 0b10) & (sink.data[8:16] == STP.value),
                 NextValue(fifo.sink.valid, 1),
                 NextValue(fifo.sink.ts, _ts),
                 NextState("TLP"),
             ),
 
-            If(sink.ctrl[1] & (sink.data[8:16] == SDP.value),
+            If((sink.ctrl == 0b10) & (sink.data[8:16] == SDP.value),
                 NextValue(fifo.sink.valid, 1),
                 NextValue(fifo.sink.ts, _ts),
                 NextState("DLLP"),
@@ -213,18 +215,20 @@ class Filter(Module, AutoCSR):
             NextValue(fifo.sink.ts, _ts),
 
             # We are done
-            If((sink.osets == 0) & (sink.data == 0),
+            If(sink.osets == 0,
                 NextValue(fifo.sink.valid, 0),
                 NextState("FIND_DELIMITER"),
             ),
 
             # It's a nested frame. Get directly to TLP
             If(sink.ctrl[1] & (sink.data[8:16] == STP.value),
+                NextValue(fifo.sink.valid, 1),
                 NextState("TLP"),
             ),
 
             # It's a nested frame. Get directly to DLLP
             If(sink.ctrl[1] & (sink.data[8:16] == SDP.value),
+                NextValue(fifo.sink.valid, 1),
                 NextState("DLLP"),
             ),
 
@@ -259,6 +263,12 @@ class Filter(Module, AutoCSR):
                 NextState("ORDERED_SETS"),
             ),
 
+            If((sink.ctrl[0] & (sink.data[0:8] != END.value)) | sink.ctrl[1],
+                NextValue(fifo.sink.valid, 1),
+                NextValue(fifo.sink.error, 1),
+                NextState("FIND_DELIMITER"),
+            ),
+
             If(~_filterEnable,
                 NextState("NO_FILTER"),
             )
@@ -288,6 +298,12 @@ class Filter(Module, AutoCSR):
             If(sink.osets & (sink.data[8:16] == COM.value),
                 NextValue(fifo.sink.valid, 1),
                 NextState("ORDERED_SETS"),
+            ),
+
+            If((sink.ctrl[0] & (sink.data[0:8] != END.value)) | sink.ctrl[1],
+                NextValue(fifo.sink.valid, 1),
+                NextValue(fifo.sink.error, 1),
+                NextState("FIND_DELIMITER"),
             ),
 
             If(~_filterEnable,
@@ -375,6 +391,48 @@ class Filter(Module, AutoCSR):
                     )
                 ),
 
+                # ---- TS1 ----
+                If(fifo.source.osets & (fifo.source.type == osetsType.TS1) & (fifo.source.data[8:16] == COM.value),
+                    If(insert_ts,
+                        NextValue(source.data, fifo.source.ts[8:16]),
+                        If(ftsEnabled,
+                            NextValue(source.valid, 1),
+                            NextValue(source.time, 1),
+                        ).Else(
+                            NextValue(last_ts, 0),
+                        ),
+
+                        NextValue(fifo.source.ready, 0),
+                        NextValue(state_after, state.TS1),
+                        NextState("TIMESTAMP_LSB"),
+                    ).Else(
+                        NextValue(count, 0),
+                        NextValue(fifo.source.ready, 1),
+                        NextState("TS1"),
+                    )
+                ),
+
+                # ---- TS2 ----
+                If(fifo.source.osets & (fifo.source.type == osetsType.TS2) & (fifo.source.data[8:16] == COM.value),
+                    If(insert_ts,
+                        NextValue(source.data, fifo.source.ts[8:16]),
+                        If(ftsEnabled,
+                            NextValue(source.valid, 1),
+                            NextValue(source.time, 1),
+                        ).Else(
+                            NextValue(last_ts, 0),
+                        ),
+
+                        NextValue(fifo.source.ready, 0),
+                        NextValue(state_after, state.TS2),
+                        NextState("TIMESTAMP_LSB"),
+                    ).Else(
+                        NextValue(count, 0),
+                        NextValue(fifo.source.ready, 1),
+                        NextState("TS2"),
+                    )
+                ),
+
                 # ---- TLP ----
                 If(fifo.source.ctrl[1] & (fifo.source.data[8:16] == STP.value),
                     If(insert_ts,
@@ -441,6 +499,20 @@ class Filter(Module, AutoCSR):
                     NextValue(source.valid, 1),
                 ),
                 NextState("FTS"),
+            ),
+
+            If((state_after == state.TS1),
+                If(ts1Enabled,
+                    NextValue(source.valid, 1),
+                ),
+                NextState("TS1"),
+            ),
+
+            If((state_after == state.TS2),
+                If(ts2Enabled,
+                    NextValue(source.valid, 1),
+                ),
+                NextState("TS2"),
             ),
 
             If((state_after == state.DLLP),
@@ -517,6 +589,60 @@ class Filter(Module, AutoCSR):
         )
 
         # *********************************************************
+        # *            Read a TS1 from the FIFO                   *
+        # *********************************************************
+        fsmReader.act("TS1",
+            NextValue(source.data, fifo.source.data),
+            NextValue(source.ctrl, fifo.source.ctrl),
+            NextValue(count, count + 1),
+            NextValue(source.valid, 1),
+            NextValue(last_ts, last_ts + 1),
+            NextValue(source.time, 0),
+            If(count == 7,
+                NextValue(fifo.source.ready, 0),
+                NextValue(source.valid, 0),
+                NextState("FILTER"),
+            ),
+
+            If(ts1Enabled,
+                NextValue(source.valid, 1),
+            ).Else(
+                NextValue(source.valid, 0),
+            ),
+
+            If(~_filterEnable,
+                NextState("NO_FILTER"),
+            )
+        )
+
+        # *********************************************************
+        # *            Read a TS2 from the FIFO                   *
+        # *********************************************************
+        fsmReader.act("TS2",
+            NextValue(source.data, fifo.source.data),
+            NextValue(source.ctrl, fifo.source.ctrl),
+            NextValue(count, count + 1),
+            NextValue(source.valid, 1),
+            NextValue(last_ts, last_ts + 1),
+            NextValue(source.time, 0),
+            If(count == 7,
+                NextValue(fifo.source.ready, 0),
+                NextValue(source.valid, 0),
+                NextState("FILTER"),
+            ),
+
+            If(ts2Enabled,
+                NextValue(source.valid, 1),
+            ).Else(
+                NextValue(source.valid, 0),
+            ),
+
+            If(~_filterEnable,
+                NextState("NO_FILTER"),
+            )
+        )
+
+        # *********************************************************
         # *            Read a TLP from the FIFO                   *
         # *********************************************************
         fsmReader.act("TLP",
@@ -526,7 +652,7 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
-            If(fifo.source.ctrl[0] & (fifo.source.data[0:8] == END.value),
+            If((fifo.source.ctrl[0] & (fifo.source.data[0:8] == END.value)) | fifo.source.error,
                 NextValue(fifo.source.ready, 0),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
@@ -553,7 +679,7 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
-            If(fifo.source.ctrl[0] & (fifo.source.data[0:8] == END.value),
+            If((fifo.source.ctrl[0] & (fifo.source.data[0:8] == END.value)) | fifo.source.error,
                 NextValue(fifo.source.ready, 0),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
