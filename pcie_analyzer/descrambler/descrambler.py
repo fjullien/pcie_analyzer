@@ -315,7 +315,7 @@ class DetectOrderedSets(Module):
 
                     self.source.osets.eq(0b11),
                     self.source.type.eq(osetsType.TS1),
-                    osets_pattern.eq(0b1111111111111100),
+                    osets_pattern.eq(0b1111111111111110),
                 ),
 
                 # If TS2
@@ -328,7 +328,7 @@ class DetectOrderedSets(Module):
 
                     self.source.osets.eq(0b11),
                     self.source.type.eq(osetsType.TS2),
-                    osets_pattern.eq(0b1111111111111100),
+                    osets_pattern.eq(0b1111111111111110),
                 ),
 
                 # If COMPLIANCE (COMMA, D21.5, COMMA, D10.2, ERROR_SYM, ERROR_SIM, COMMA, COMMA)
