@@ -248,6 +248,16 @@ class Filter(Module, AutoCSR):
                 NextState("FIND_DELIMITER"),
             ),
 
+            # By default, is we have a K symbol before END, that's an error
+            If((sink.ctrl[0] & (sink.data[0:8] != END.value)) | sink.ctrl[1],
+                NextValue(fifo.sink.valid, 1),
+                NextValue(fifo.sink.error, 1),
+                NextState("FIND_DELIMITER"),
+            ).Else(
+                NextValue(fifo.sink.valid, 0),
+                NextValue(fifo.sink.error, 0),
+            ),
+
             If(sink.ctrl[1] & (sink.data[8:16] == STP.value),
                 NextValue(fifo.sink.valid, 1),
                 NextState("TLP"),
@@ -261,12 +271,6 @@ class Filter(Module, AutoCSR):
             If(sink.osets & (sink.data[8:16] == COM.value),
                 NextValue(fifo.sink.valid, 1),
                 NextState("ORDERED_SETS"),
-            ),
-
-            If((sink.ctrl[0] & (sink.data[0:8] != END.value)) | sink.ctrl[1],
-                NextValue(fifo.sink.valid, 1),
-                NextValue(fifo.sink.error, 1),
-                NextState("FIND_DELIMITER"),
             ),
 
             If(~_filterEnable,
@@ -285,6 +289,16 @@ class Filter(Module, AutoCSR):
                 NextState("FIND_DELIMITER"),
             ),
 
+            # By default, is we have a K symbol before END, that's an error
+            If((sink.ctrl[0] & (sink.data[0:8] != END.value)) | sink.ctrl[1],
+                NextValue(fifo.sink.valid, 1),
+                NextValue(fifo.sink.error, 1),
+                NextState("FIND_DELIMITER"),
+            ).Else(
+                NextValue(fifo.sink.valid, 0),
+                NextValue(fifo.sink.error, 0),
+            ),
+
             If(sink.ctrl[1] & (sink.data[8:16] == STP.value),
                 NextValue(fifo.sink.valid, 1),
                 NextState("TLP"),
@@ -298,12 +312,6 @@ class Filter(Module, AutoCSR):
             If(sink.osets & (sink.data[8:16] == COM.value),
                 NextValue(fifo.sink.valid, 1),
                 NextState("ORDERED_SETS"),
-            ),
-
-            If((sink.ctrl[0] & (sink.data[0:8] != END.value)) | sink.ctrl[1],
-                NextValue(fifo.sink.valid, 1),
-                NextValue(fifo.sink.error, 1),
-                NextState("FIND_DELIMITER"),
             ),
 
             If(~_filterEnable,
@@ -337,6 +345,7 @@ class Filter(Module, AutoCSR):
         fsmReader.act("FILTER",
             NextValue(source.valid, 0),
             NextValue(source.time, 0),
+            NextValue(fifo.source.ready, 0),
 
             If(fifo.source.valid,
 
@@ -653,7 +662,7 @@ class Filter(Module, AutoCSR):
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
             If((fifo.source.ctrl[0] & (fifo.source.data[0:8] == END.value)) | fifo.source.error,
-                NextValue(fifo.source.ready, 0),
+                NextValue(fifo.source.ready, 1),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
             ),
@@ -680,7 +689,7 @@ class Filter(Module, AutoCSR):
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
             If((fifo.source.ctrl[0] & (fifo.source.data[0:8] == END.value)) | fifo.source.error,
-                NextValue(fifo.source.ready, 0),
+                NextValue(fifo.source.ready, 1),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
             ),
