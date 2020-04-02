@@ -1,50 +1,85 @@
 [*]
-[*] GTKWave Analyzer v3.3.86 (w)1999-2017 BSI
-[*] Tue Feb 25 15:38:24 2020
+[*] GTKWave Analyzer v3.3.68 (w)1999-2016 BSI
+[*] Thu Apr  2 12:39:10 2020
 [*]
-[dumpfile] "/home/odyssee/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/sim.vcd"
-[dumpfile_mtime] "Tue Feb 25 15:36:20 2020"
-[dumpfile_size] 35235
-[savefile] "/home/odyssee/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/wave.gtkw"
-[timestart] 6
-[size] 1920 1120
-[pos] -1 -1
-*-6.000000 215 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
-[sst_width] 249
-[signals_width] 302
+[dumpfile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/trigger/sim.vcd"
+[dumpfile_mtime] "Thu Apr  2 12:37:08 2020"
+[dumpfile_size] 38348
+[savefile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/trigger/wave.gtkw"
+[timestart] 0
+[size] 1920 1028
+[pos] -1921 -28
+*-8.000000 372 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 432
+[signals_width] 350
 [sst_expanded] 1
-[sst_vpaned_height] 335
+[sst_vpaned_height] 303
+@200
+-STREAM IN
 @22
-streamer_source_payload_data[15:0]
+[color] 2
+trigger_sink_sink_payload_data[15:0]
 @28
-streamer_source_payload_ctrl[1:0]
-streamer_source_payload_osets[1:0]
-@22
-streamer_source_payload_type[3:0]
-@28
-streamer_source_ready
-streamer_source_valid
-@22
-trigger_size_storage[7:0]
-wrport_adr[6:0]
-wrport_dat_w[17:0]
-@28
-wrport_we
-trigger_armed_storage
+[color] 2
+trigger_sink_sink_payload_ctrl[1:0]
+[color] 2
+trigger_sink_sink_payload_time
+[color] 2
+trigger_sink_sink_valid
+@200
+-STREAM OUT
 @22
 [color] 6
-trigger_data0[15:0]
-[color] 2
-trigger_data1[15:0]
-@23
-trigger_addr[6:0]
-@22
-trigger_matches[7:0]
+trigger_source_source_payload_data[15:0]
+@28
+[color] 6
+trigger_source_source_payload_ctrl[1:0]
+[color] 6
+trigger_source_source_payload_time
+[color] 6
+trigger_source_source_payload_trig
+@200
+-TRIGGER
 @820
-[color] 3
 state[119:0]
-@22
-trigger_dat_r[17:0]
-trigger_adr[6:0]
+@800022
+trigger_dat_r[19:0]
+@100024
++{DC_UPPER} (0)trigger_dat_r[19:0]
+@28
++{DC_LOWER} (1)trigger_dat_r[19:0]
++{K_UPPER} (2)trigger_dat_r[19:0]
++{K_LOWER} (3)trigger_dat_r[19:0]
+@c00022
+#{RAM_DATA_UPPER} (4)trigger_dat_r[19:0] (5)trigger_dat_r[19:0] (6)trigger_dat_r[19:0] (7)trigger_dat_r[19:0] (8)trigger_dat_r[19:0] (9)trigger_dat_r[19:0] (10)trigger_dat_r[19:0] (11)trigger_dat_r[19:0]
+@28
+(4)trigger_dat_r[19:0]
+(5)trigger_dat_r[19:0]
+(6)trigger_dat_r[19:0]
+(7)trigger_dat_r[19:0]
+(8)trigger_dat_r[19:0]
+(9)trigger_dat_r[19:0]
+(10)trigger_dat_r[19:0]
+(11)trigger_dat_r[19:0]
+@1401200
+-group_end
+@c00022
+#{RAM_DATA_LOWER} (12)trigger_dat_r[19:0] (13)trigger_dat_r[19:0] (14)trigger_dat_r[19:0] (15)trigger_dat_r[19:0] (16)trigger_dat_r[19:0] (17)trigger_dat_r[19:0] (18)trigger_dat_r[19:0] (19)trigger_dat_r[19:0]
+@28
+(12)trigger_dat_r[19:0]
+(13)trigger_dat_r[19:0]
+(14)trigger_dat_r[19:0]
+(15)trigger_dat_r[19:0]
+(16)trigger_dat_r[19:0]
+(17)trigger_dat_r[19:0]
+(18)trigger_dat_r[19:0]
+(19)trigger_dat_r[19:0]
+@1401200
+-group_end
+@28
+trigger_trigged
+trigger_armed
+@1001200
+-group_end
 [pattern_trace] 1
 [pattern_trace] 0

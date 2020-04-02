@@ -25,8 +25,8 @@ from common import *
 # *                                                       *
 # *********************************************************
 
-def make_data(typ, osets, ctrl, data):
-    return (typ << 20) + (osets << 18) + (ctrl << 16) + data
+def make_data(time, ctrl, data):
+    return (time << 18) + (ctrl << 16) + data
 
 def make_mem_data(dc, ctrl, data):
     return (dc << 18) + (ctrl << 16) + data
@@ -37,37 +37,42 @@ def make_mem_data(dc, ctrl, data):
 # *                                                       *
 # *********************************************************
 
-# data -------------------+
-# ctrl -------------+     |
-# osets----------+  |     |
-# type -------+  |  |     |
-#             |  |  |     |
-#             v  v  v     v
+# data ----------------+
+# ctrl ----------+     |
+# time -------+  |     |
+#             |  |     |
+#             |  |     |
+#             v  v     v
 data = [
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 3, 0xbc1c),
-    make_data(0, 0, 3, 0x1c1c),
-    make_data(0, 0, 0, 0xAABB),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 1, 0x00bc),
-    make_data(0, 0, 3, 0x1c1c),
-    make_data(0, 0, 2, 0x1c00),
-    make_data(0, 0, 0, 0xbb1c),
-    make_data(0, 0, 0, 0x0000),
-    make_data(0, 0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 3, 0xbc1c),
+    make_data(0, 3, 0x1c1c),
+    make_data(0, 0, 0xAABB),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
+    make_data(0, 1, 0x00bc),
+    make_data(0, 3, 0x1c1c),
+    make_data(0, 2, 0x1c00),
+    make_data(0, 0, 0xbb1c),
+    make_data(0, 0, 0x0000),
+    make_data(0, 0, 0x0000),
 ]
 
 #  data       ---------------------------------+
@@ -90,14 +95,13 @@ mem_data =    [(0, make_mem_data(0b01, 0b11, 0xbc1c)),
 class TB(Module):
     def __init__(self):
 
-        self.submodules.streamer = PacketStreamer(descrambler_layout)
+        self.submodules.streamer = PacketStreamer(filter_layout)
         self.submodules.trigger = Trigger("sys")
 
         self.specials.wrport = self.trigger.mem.get_port(write_capable=True, clock_domain="sys")
 
         self.comb += [
             self.streamer.source.connect(self.trigger.sink),
-            self.trigger.source.ready.eq(1),
         ]
 
 # *********************************************************
@@ -124,9 +128,14 @@ def main_generator(dut):
     dut.streamer.send(packet)
 
     yield dut.trigger.enable.eq(1)
+    yield dut.trigger.source.ready.eq(1)
 
     for i in range(1000):
+
         # If trigged, rearm
+        if i == 50:
+            yield dut.trigger.source.ready.eq(0)
+
         if((yield dut.trigger.trigged.status)):
             yield from dut.trigger.armed.write(0)
             yield from dut.trigger.armed.write(0)
