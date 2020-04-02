@@ -63,14 +63,6 @@ class Trigger(Module, AutoCSR):
         # *********************************************************
         # *                      Signals                          *
         # *********************************************************
-        data0    = Signal(16)
-        data1    = Signal(16)
-        ctrl0    = Signal(2)
-        ctrl1    = Signal(2)
-        time0    = Signal()
-        time1    = Signal()
-        valid0   = Signal()
-        valid1   = Signal()
         matches  = Signal(8)
         addr     = Signal(log2_int(mem_size))
 
@@ -92,29 +84,18 @@ class Trigger(Module, AutoCSR):
         self.specials.rdport = self.mem.get_port(write_capable=False, async_read=True, clock_domain=clock_domain)
 
         # *********************************************************
-        # *                    Synchronous                        *
+        # *                     Submodules                        *
         # *********************************************************
-        sync = getattr(self.sync, clock_domain)
-        sync += [
-            data0.eq(self.sink.data),
-            data1.eq(data0),
-            ctrl0.eq(self.sink.ctrl),
-            ctrl1.eq(ctrl0),
-            time0.eq(self.sink.time),
-            time1.eq(time0),
-            valid0.eq(self.sink.valid),
-            valid1.eq(valid0),
-         ]
+        buf0 = stream.Buffer(filter_layout)
+        self.submodules += ClockDomainsRenamer(clock_domain)(buf0)
 
         # *********************************************************
         # *                    Combinatorial                      *
         # *********************************************************
         self.comb += [
-            self.source.data.eq(data1),
-            self.source.ctrl.eq(ctrl1),
-            self.source.time.eq(time1),
+            sink.connect(buf0.sink),
+            buf0.source.connect(source, omit={"trig"}),
             self.rdport.adr.eq(addr),
-            self.sink.ready.eq(1),
         ]
 
         # *********************************************************
@@ -134,22 +115,22 @@ class Trigger(Module, AutoCSR):
 
         fsm.act("FIRST",
             # If we search "bc1c" we are in this situation: bc1c 1c1c xxxx
-            If((((self.rdport.dat_r[UPPER_BYTE] == data1[UPPER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
-               ((self.rdport.dat_r[LOWER_BYTE]  == data1[LOWER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
-               ((self.rdport.dat_r[UPPER_K]     == ctrl1[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
-               ((self.rdport.dat_r[LOWER_K]     == ctrl1[CTRL_LOWER_K])| self.rdport.dat_r[LOWER_DONT_CARE]) &
-                ~time1 & valid1),
+            If((((self.rdport.dat_r[UPPER_BYTE] == buf0.source.data[UPPER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
+               ((self.rdport.dat_r[LOWER_BYTE]  == buf0.source.data[LOWER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
+               ((self.rdport.dat_r[UPPER_K]     == buf0.source.ctrl[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
+               ((self.rdport.dat_r[LOWER_K]     == buf0.source.ctrl[CTRL_LOWER_K])| self.rdport.dat_r[LOWER_DONT_CARE]) &
+                ~buf0.source.time & buf0.source.valid),
                 # Full word match
                 NextValue(matches, matches + 1),
                 NextValue(addr, addr + 1),
                 NextState("ALIGNED_CHECK")
             ).Else(
                 # If we search "bc1c" we are in this situation: xxbc 1c1c 1cxx
-                If((((self.rdport.dat_r[UPPER_BYTE] == data1[LOWER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
-                    ((self.rdport.dat_r[LOWER_BYTE] == data0[UPPER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
-                    ((self.rdport.dat_r[UPPER_K]    == ctrl1[CTRL_LOWER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
-                    ((self.rdport.dat_r[LOWER_K]    == ctrl0[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
-                     ~time1 & ~time0 & valid1),
+                If((((self.rdport.dat_r[UPPER_BYTE] == buf0.source.data[LOWER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
+                    ((self.rdport.dat_r[LOWER_BYTE] == sink.data[UPPER_BYTE])         | self.rdport.dat_r[LOWER_DONT_CARE]) &
+                    ((self.rdport.dat_r[UPPER_K]    == buf0.source.ctrl[CTRL_LOWER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
+                    ((self.rdport.dat_r[LOWER_K]    == sink.ctrl[CTRL_UPPER_K])       | self.rdport.dat_r[UPPER_DONT_CARE]) &
+                     ~buf0.source.time & ~sink.time & buf0.source.valid & sink.valid),
                         # Half word match
                         NextValue(matches, matches + 1),
                         NextValue(addr, addr + 1),
@@ -162,13 +143,13 @@ class Trigger(Module, AutoCSR):
             If(matches == _size,
                 NextState("DONE"),
                 NextValue(_trigged, 1),
-                self.source.trig.eq(1),
+                source.trig.eq(1),
             ).Else(
-                If((((self.rdport.dat_r[UPPER_BYTE] == data1[UPPER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
-                   ((self.rdport.dat_r[LOWER_BYTE]  == data1[LOWER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
-                   ((self.rdport.dat_r[UPPER_K]     == ctrl1[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
-                   ((self.rdport.dat_r[LOWER_K]     == ctrl1[CTRL_LOWER_K])| self.rdport.dat_r[LOWER_DONT_CARE]) &
-                    ~time1 & valid1),
+                If((((self.rdport.dat_r[UPPER_BYTE] == buf0.source.data[UPPER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
+                   ((self.rdport.dat_r[LOWER_BYTE]  == buf0.source.data[LOWER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
+                   ((self.rdport.dat_r[UPPER_K]     == buf0.source.ctrl[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
+                   ((self.rdport.dat_r[LOWER_K]     == buf0.source.ctrl[CTRL_LOWER_K])| self.rdport.dat_r[LOWER_DONT_CARE]) &
+                    ~buf0.source.time & buf0.source.valid),
                     NextValue(matches, matches + 1),
                     NextValue(addr, addr + 1),
                     NextState("ALIGNED_CHECK")
@@ -184,13 +165,13 @@ class Trigger(Module, AutoCSR):
             If(matches == _size,
                 NextState("DONE"),
                 NextValue(_trigged, 1),
-                self.source.trig.eq(1),
+                source.trig.eq(1),
             ).Else(
-                If((((self.rdport.dat_r[UPPER_BYTE] == data1[LOWER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
-                    ((self.rdport.dat_r[LOWER_BYTE] == data0[UPPER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
-                    ((self.rdport.dat_r[UPPER_K]    == ctrl1[CTRL_LOWER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
-                    ((self.rdport.dat_r[LOWER_K]    == ctrl0[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
-                     ~time1 & ~time0 & valid1),
+                If((((self.rdport.dat_r[UPPER_BYTE] == buf0.source.data[LOWER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
+                    ((self.rdport.dat_r[LOWER_BYTE] == sink.data[UPPER_BYTE])         | self.rdport.dat_r[LOWER_DONT_CARE]) &
+                    ((self.rdport.dat_r[UPPER_K]    == buf0.source.ctrl[CTRL_LOWER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
+                    ((self.rdport.dat_r[LOWER_K]    == sink.ctrl[CTRL_UPPER_K])       | self.rdport.dat_r[UPPER_DONT_CARE]) &
+                     ~buf0.source.time & ~sink.time & buf0.source.valid & sink.valid),
                         # Half word match
                         NextValue(matches, matches + 1),
                         NextValue(addr, addr + 1),
