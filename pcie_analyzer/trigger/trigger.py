@@ -57,7 +57,7 @@ class Trigger(Module, AutoCSR):
 
         self.enable   = Signal()
 
-        self.sink   =   sink = stream.Endpoint(descrambler_layout)
+        self.sink   =   sink = stream.Endpoint(filter_layout)
         self.source = source = stream.Endpoint(trigger_layout)
 
         # *********************************************************
@@ -67,6 +67,10 @@ class Trigger(Module, AutoCSR):
         data1    = Signal(16)
         ctrl0    = Signal(2)
         ctrl1    = Signal(2)
+        time0    = Signal()
+        time1    = Signal()
+        valid0   = Signal()
+        valid1   = Signal()
         matches  = Signal(8)
         addr     = Signal(log2_int(mem_size))
 
@@ -96,6 +100,10 @@ class Trigger(Module, AutoCSR):
             data1.eq(data0),
             ctrl0.eq(self.sink.ctrl),
             ctrl1.eq(ctrl0),
+            time0.eq(self.sink.time),
+            time1.eq(time0),
+            valid0.eq(self.sink.valid),
+            valid1.eq(valid0),
          ]
 
         # *********************************************************
@@ -104,6 +112,7 @@ class Trigger(Module, AutoCSR):
         self.comb += [
             self.source.data.eq(data1),
             self.source.ctrl.eq(ctrl1),
+            self.source.time.eq(time1),
             self.rdport.adr.eq(addr),
             self.sink.ready.eq(1),
         ]
@@ -128,7 +137,8 @@ class Trigger(Module, AutoCSR):
             If((((self.rdport.dat_r[UPPER_BYTE] == data1[UPPER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
                ((self.rdport.dat_r[LOWER_BYTE]  == data1[LOWER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
                ((self.rdport.dat_r[UPPER_K]     == ctrl1[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
-               ((self.rdport.dat_r[LOWER_K]     == ctrl1[CTRL_LOWER_K])| self.rdport.dat_r[LOWER_DONT_CARE])),
+               ((self.rdport.dat_r[LOWER_K]     == ctrl1[CTRL_LOWER_K])| self.rdport.dat_r[LOWER_DONT_CARE]) &
+                ~time1 & valid1),
                 # Full word match
                 NextValue(matches, matches + 1),
                 NextValue(addr, addr + 1),
@@ -138,7 +148,8 @@ class Trigger(Module, AutoCSR):
                 If((((self.rdport.dat_r[UPPER_BYTE] == data1[LOWER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
                     ((self.rdport.dat_r[LOWER_BYTE] == data0[UPPER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
                     ((self.rdport.dat_r[UPPER_K]    == ctrl1[CTRL_LOWER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
-                    ((self.rdport.dat_r[LOWER_K]    == ctrl0[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE])),
+                    ((self.rdport.dat_r[LOWER_K]    == ctrl0[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
+                     ~time1 & ~time0 & valid1),
                         # Half word match
                         NextValue(matches, matches + 1),
                         NextValue(addr, addr + 1),
@@ -156,7 +167,8 @@ class Trigger(Module, AutoCSR):
                 If((((self.rdport.dat_r[UPPER_BYTE] == data1[UPPER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
                    ((self.rdport.dat_r[LOWER_BYTE]  == data1[LOWER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
                    ((self.rdport.dat_r[UPPER_K]     == ctrl1[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
-                   ((self.rdport.dat_r[LOWER_K]     == ctrl1[CTRL_LOWER_K])| self.rdport.dat_r[LOWER_DONT_CARE])),
+                   ((self.rdport.dat_r[LOWER_K]     == ctrl1[CTRL_LOWER_K])| self.rdport.dat_r[LOWER_DONT_CARE]) &
+                    ~time1 & valid1),
                     NextValue(matches, matches + 1),
                     NextValue(addr, addr + 1),
                     NextState("ALIGNED_CHECK")
@@ -177,7 +189,8 @@ class Trigger(Module, AutoCSR):
                 If((((self.rdport.dat_r[UPPER_BYTE] == data1[LOWER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
                     ((self.rdport.dat_r[LOWER_BYTE] == data0[UPPER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
                     ((self.rdport.dat_r[UPPER_K]    == ctrl1[CTRL_LOWER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
-                    ((self.rdport.dat_r[LOWER_K]    == ctrl0[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE])),
+                    ((self.rdport.dat_r[LOWER_K]    == ctrl0[CTRL_UPPER_K])| self.rdport.dat_r[UPPER_DONT_CARE]) &
+                     ~time1 & ~time0 & valid1),
                         # Half word match
                         NextValue(matches, matches + 1),
                         NextValue(addr, addr + 1),
@@ -191,6 +204,8 @@ class Trigger(Module, AutoCSR):
         )
 
         fsm.act("DONE",
-            NextValue(_trigged, 0),
-            NextState("IDLE")
+            If(_armed == 0,
+                NextState("IDLE"),
+                NextValue(_trigged, 0),
+            )
         )
