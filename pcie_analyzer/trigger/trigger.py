@@ -95,6 +95,7 @@ class Trigger(Module, AutoCSR):
         self.comb += [
             sink.connect(buf0.sink),
             buf0.source.connect(source, omit={"trig"}),
+            sink.ready.eq(source.ready),
             self.rdport.adr.eq(addr),
         ]
 
