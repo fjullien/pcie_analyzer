@@ -53,8 +53,8 @@ descrambler_layout = [
 trigger_layout = [
     ("data"   , 16), # 2 bytes
     ("ctrl"   , 2),  # 2 K symbols flag
-    ("trig"   , 1)   # 1 Trigger position indicator
-#   ("spare"  , 1)   # 
+    ("trig"   , 1),  # 1 Trigger position indicator
+    ("time"   , 1)   # 1 Time stamp flag
 ]
 
 gtp_layout = [
