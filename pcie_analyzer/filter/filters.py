@@ -63,6 +63,7 @@ class state(IntEnum):
     TS2  = 3
     TLP  = 4
     DLLP = 5
+    IDLE = 6
 
 filter_fifo_layout = [
     ("data" , 16),
@@ -115,6 +116,7 @@ class Filter(Module, AutoCSR):
         dllpEnabled  = Signal()
         ts1Enabled   = Signal()
         ts2Enabled   = Signal()
+        idleEnabled  = Signal()
 
         count        = Signal(8)
         insert_ts    = Signal()
@@ -159,6 +161,7 @@ class Filter(Module, AutoCSR):
             dllpEnabled.eq(_filterConfig[3]),
             ts1Enabled.eq( _filterConfig[4]),
             ts2Enabled.eq( _filterConfig[5]),
+            idleEnabled.eq( _filterConfig[6]),
         ]
 
         # *********************************************************
@@ -410,6 +413,28 @@ class Filter(Module, AutoCSR):
                     )
                 ),
 
+                # ---- IDLE ----
+                If(buf_out.source.osets & (buf_out.source.type == osetsType.IDLE) & (buf_out.source.data[8:16] == COM.value),
+                    If(insert_ts,
+                        NextValue(source.data, buf_out.source.ts[8:16]),
+                        # When this frame is disabled, we need to change last_ts
+                        # in order to force ts insertion on the next frame.
+                        If(idleEnabled,
+                            NextValue(source.valid, 1),
+                            NextValue(source.time, 1),
+                        ).Else(
+                            NextValue(last_ts, 0),
+                        ),
+                        NextValue(buf_out.source.ready, 0),
+                        NextValue(state_after, state.IDLE),
+                        NextState("TIMESTAMP_LSB"),
+                    ).Else(
+                        NextValue(count, 0),
+                        NextValue(buf_out.source.ready, 1),
+                        NextState("IDLE"),
+                    )
+                ),
+
                 # ---- FTS ----
                 If(buf_out.source.osets & (buf_out.source.type == osetsType.FTS) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
@@ -534,6 +559,13 @@ class Filter(Module, AutoCSR):
                 NextState("SKIP"),
             ),
 
+            If((state_after == state.IDLE),
+                If(ftsEnabled,
+                    NextValue(source.valid, 1),
+                ),
+                NextState("IDLE"),
+            ),
+
             If((state_after == state.FTS),
                 If(ftsEnabled,
                     NextValue(source.valid, 1),
@@ -591,6 +623,33 @@ class Filter(Module, AutoCSR):
             ),
 
             If(skipEnabled,
+                NextValue(source.valid, 1),
+            ).Else(
+                NextValue(source.valid, 0),
+            ),
+
+            If(~_filterEnable,
+                NextState("NO_FILTER"),
+            )
+        )
+
+        # *********************************************************
+        # *            Read a IDLE from the FIFO                   *
+        # *********************************************************
+        fsmReader.act("IDLE",
+            NextValue(source.data, buf_out.source.data),
+            NextValue(source.ctrl, buf_out.source.ctrl),
+            NextValue(count, count + 1),
+            NextValue(source.valid, 1),
+            NextValue(last_ts, last_ts + 1),
+            NextValue(source.time, 0),
+            If(count == 1,
+                NextValue(buf_out.source.ready, 0),
+                NextValue(source.valid, 0),
+                NextState("FILTER"),
+            ),
+
+            If(idleEnabled,
                 NextValue(source.valid, 1),
             ).Else(
                 NextValue(source.valid, 0),

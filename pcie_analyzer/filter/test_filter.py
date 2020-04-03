@@ -66,6 +66,11 @@ skip = [
         make_data(osetsType.SKIP, 3, 3, 0x1c1c),
 ]
 
+idle = [
+        make_data(osetsType.IDLE, 3, 3, 0xbc7c),
+        make_data(osetsType.IDLE, 3, 3, 0x7c7c),
+]
+
 fts = [
         make_data(osetsType.FTS, 3, 3, 0xbc3c),
         make_data(osetsType.FTS, 3, 3, 0x3c3c),
@@ -175,7 +180,7 @@ def generates_random_stream(number, tlp_dllp_max_size, filter_config):
     print("")
 
     for i in range(number):
-        case = random.randint(0, 7)
+        case = random.randint(0, 8)
         if case == 0:
             print("SKIP, ", end = '')
             unfinished = 0
@@ -211,12 +216,17 @@ def generates_random_stream(number, tlp_dllp_max_size, filter_config):
             data_raw += tlp
             data_check += tlp
         if case == 6:
+            print("IDLE, ", end = '')
+            unfinished = 0
+            data_raw += idle
+            data_check += idle
+        if case == 7:
             print("UNFINISHED TLP, ", end = '')
             unfinished = 1
             payload = 0
             data_raw += unfinished_tlp
             data_check += unfinished_tlp
-        if case == 7:
+        if case == 8:
             unfinished = 1
             payload = 0
             print("UNFINISHED DLLP, ", end = '')
