@@ -1,19 +1,19 @@
 [*]
 [*] GTKWave Analyzer v3.3.68 (w)1999-2016 BSI
-[*] Wed Mar 25 22:20:50 2020
+[*] Fri Apr  3 20:03:30 2020
 [*]
 [dumpfile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/filter/sim.vcd"
-[dumpfile_mtime] "Wed Mar 25 22:15:01 2020"
-[dumpfile_size] 110994
+[dumpfile_mtime] "Fri Apr  3 20:00:07 2020"
+[dumpfile_size] 2424889
 [savefile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/filter/wave.gtkw"
 [timestart] 0
 [size] 1920 1121
-[pos] -1 -1
-*-8.134266 389 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
-[sst_width] 464
+[pos] 1919 26
+*-13.134266 16090 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 412
 [signals_width] 374
 [sst_expanded] 1
-[sst_vpaned_height] 480
+[sst_vpaned_height] 422
 @200
 -STREAM IN
 @22
@@ -32,11 +32,12 @@ sink_sink_payload_type[3:0]
 @820
 [color] 6
 clockdomainsrenamer0_state[111:0]
-[color] 6
 clockdomainsrenamer1_state[103:0]
+@29
+from_error
 @200
 -CONTROL
-@200025
+@200024
 [color] 7
 filterEnable
 @28
@@ -52,14 +53,23 @@ skipEnabled
 syncfifo_sink_payload_data[15:0]
 syncfifo_sink_payload_ts[31:0]
 @28
+syncfifo_sink_payload_osets[1:0]
+syncfifo_sink_payload_error
 syncfifo_sink_valid
 @200
--FIFO OUT
+-BUF_OUT
 @22
-syncfifo_source_payload_data[15:0]
+[color] 5
+buf_out_source_payload_data[15:0]
 @28
-syncfifo_source_ready
-syncfifo_source_valid
+[color] 5
+buf_out_source_payload_ctrl[1:0]
+[color] 5
+buf_out_source_payload_osets[1:0]
+[color] 5
+buf_out_source_valid
+[color] 5
+buf_out_source_ready
 @200
 -STREAM OUT
 @22

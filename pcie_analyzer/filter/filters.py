@@ -91,8 +91,9 @@ class Filter(Module, AutoCSR):
         # *********************************************************
         # *                    Interface                          *
         # *********************************************************
-        self.filterEnable = CSRStorage()
-        self.filterConfig = CSRStorage(32)  # Filter configuration
+        self.filterEnable      = CSRStorage()
+        self.filterConfig      = CSRStorage(32)  # Filter configuration
+        self.tlpDllpTimeoutCnt = CSRStorage(32)  # Payload size used for error detection
 
         self.ts           = Signal(32)      # Global time stamp
 
@@ -104,6 +105,7 @@ class Filter(Module, AutoCSR):
         # *********************************************************
         _ts           = Signal(32)
         _filterConfig = Signal(32)
+        _tlpDllpTimeoutCnt  = Signal(32)
 
         _filterEnable = Signal()
 
@@ -118,6 +120,8 @@ class Filter(Module, AutoCSR):
         insert_ts    = Signal()
         state_after  = Signal(4)
         last_ts      = Signal(32)
+        payload_cnt  = Signal(32)
+        from_error   = Signal()
 
         # *********************************************************
         # *                         CDC                           *
@@ -125,6 +129,7 @@ class Filter(Module, AutoCSR):
         self.specials += MultiReg(self.ts, _ts, clock_domain)
         self.specials += MultiReg(self.filterConfig.storage, _filterConfig, clock_domain)
         self.specials += MultiReg(self.filterEnable.storage, _filterEnable, clock_domain)
+        self.specials += MultiReg(self.tlpDllpTimeoutCnt.storage, _tlpDllpTimeoutCnt, clock_domain)
 
         # *********************************************************
         # *                     Submodules                        *
@@ -132,16 +137,21 @@ class Filter(Module, AutoCSR):
         fifo = ResetInserter()(stream.SyncFIFO(filter_fifo_layout, fifo_size))
         self.submodules.fifo   = ClockDomainsRenamer(clock_domain)(fifo)
 
-        buf0 = stream.Buffer(descrambler_layout)
-        self.submodules += ClockDomainsRenamer(clock_domain)(buf0)
+        buf_in = stream.Buffer(descrambler_layout)
+        self.submodules += ClockDomainsRenamer(clock_domain)(buf_in)
+
+        buf_out = stream.Buffer(filter_fifo_layout)
+        self.submodules += ClockDomainsRenamer(clock_domain)(buf_out)
 
         # *********************************************************
         # *                    Combinatorial                      *
         # *********************************************************
         self.comb += [
-            sink.connect(buf0.sink),
-            buf0.source.connect(fifo.sink, omit={"valid", "ts", "error"}),
+            sink.connect(buf_in.sink),
+            buf_in.source.connect(fifo.sink, omit={"valid", "ts", "error"}),
             self.sink.ready.eq(1),
+
+            fifo.source.connect(buf_out.sink),
 
             skipEnabled.eq(_filterConfig[0]),
             ftsEnabled.eq( _filterConfig[1]),
@@ -165,7 +175,7 @@ class Filter(Module, AutoCSR):
         # *********************************************************
         fsmWriter.act("NO_FILTER",
             NextValue(fifo.sink.valid, 0),
-            NextValue(fifo.source.ready, 0),
+            NextValue(buf_out.source.ready, 0),
             If(_filterEnable,
                 self.fifo.reset.eq(1),
                 NextState("FIND_DELIMITER"),
@@ -185,21 +195,26 @@ class Filter(Module, AutoCSR):
             NextValue(fifo.sink.valid, 0),
             NextValue(fifo.sink.error, 0),
 
+            # Ordered sets
             If(sink.osets & (sink.data[8:16] == COM.value),
                 NextValue(fifo.sink.valid, 1),
                 NextValue(fifo.sink.ts, _ts),
                 NextState("ORDERED_SETS"),
             ),
 
+            # TLP
             If((sink.ctrl == 0b10) & (sink.data[8:16] == STP.value),
                 NextValue(fifo.sink.valid, 1),
                 NextValue(fifo.sink.ts, _ts),
+                NextValue(payload_cnt, 0),
                 NextState("TLP"),
             ),
 
+            # DLLP
             If((sink.ctrl == 0b10) & (sink.data[8:16] == SDP.value),
                 NextValue(fifo.sink.valid, 1),
                 NextValue(fifo.sink.ts, _ts),
+                NextValue(payload_cnt, 0),
                 NextState("DLLP"),
             ),
 
@@ -213,6 +228,7 @@ class Filter(Module, AutoCSR):
         # *********************************************************
         fsmWriter.act("ORDERED_SETS",
             NextValue(fifo.sink.ts, _ts),
+            NextValue(fifo.sink.error, 0),
 
             # We are done
             If(sink.osets == 0,
@@ -223,12 +239,14 @@ class Filter(Module, AutoCSR):
             # It's a nested frame. Get directly to TLP
             If(sink.ctrl[1] & (sink.data[8:16] == STP.value),
                 NextValue(fifo.sink.valid, 1),
+                NextValue(payload_cnt, 0),
                 NextState("TLP"),
             ),
 
             # It's a nested frame. Get directly to DLLP
             If(sink.ctrl[1] & (sink.data[8:16] == SDP.value),
                 NextValue(fifo.sink.valid, 1),
+                NextValue(payload_cnt, 0),
                 NextState("DLLP"),
             ),
 
@@ -242,29 +260,33 @@ class Filter(Module, AutoCSR):
         # *********************************************************
         fsmWriter.act("TLP",
             NextValue(fifo.sink.ts, _ts),
-
-            If((buf0.source.ctrl[0]) & (buf0.source.data[0:8] == END.value),
-                NextValue(fifo.sink.valid, 0),
-                NextState("FIND_DELIMITER"),
-            ),
+            NextValue(fifo.sink.error, 0),
+            NextValue(payload_cnt, payload_cnt + 1),
 
             # By default, is we have a K symbol before END, that's an error
-            If((sink.ctrl[0] & (sink.data[0:8] != END.value)) | sink.ctrl[1],
-                NextValue(fifo.sink.valid, 1),
+            If((sink.ctrl[0] & (sink.data[0:8] != END.value)) | sink.ctrl[1] | (payload_cnt > _tlpDllpTimeoutCnt),
                 NextValue(fifo.sink.error, 1),
+                NextValue(fifo.sink.valid, 1),
                 NextState("FIND_DELIMITER"),
             ).Else(
+                NextValue(fifo.sink.error, 0),
+            ),
+
+            If((buf_in.source.ctrl[0]) & (buf_in.source.data[0:8] == END.value),
                 NextValue(fifo.sink.valid, 0),
                 NextValue(fifo.sink.error, 0),
+                NextState("FIND_DELIMITER"),
             ),
 
             If(sink.ctrl[1] & (sink.data[8:16] == STP.value),
                 NextValue(fifo.sink.valid, 1),
+                NextValue(payload_cnt, 0),
                 NextState("TLP"),
             ),
 
             If(sink.ctrl[1] & (sink.data[8:16] == SDP.value),
                 NextValue(fifo.sink.valid, 1),
+                NextValue(payload_cnt, 0),
                 NextState("DLLP"),
             ),
 
@@ -283,29 +305,33 @@ class Filter(Module, AutoCSR):
         # *********************************************************
         fsmWriter.act("DLLP",
             NextValue(fifo.sink.ts, _ts),
-
-            If((buf0.source.ctrl[0]) & (buf0.source.data[0:8] == END.value),
-                NextValue(fifo.sink.valid, 0),
-                NextState("FIND_DELIMITER"),
-            ),
+            NextValue(fifo.sink.error, 0),
+            NextValue(payload_cnt, payload_cnt + 1),
 
             # By default, is we have a K symbol before END, that's an error
-            If((sink.ctrl[0] & (sink.data[0:8] != END.value)) | sink.ctrl[1],
-                NextValue(fifo.sink.valid, 1),
+            If((sink.ctrl[0] & (sink.data[0:8] != END.value)) | sink.ctrl[1]| (payload_cnt > _tlpDllpTimeoutCnt),
                 NextValue(fifo.sink.error, 1),
+                NextValue(fifo.sink.valid, 1),
                 NextState("FIND_DELIMITER"),
             ).Else(
+                NextValue(fifo.sink.error, 0),
+            ),
+
+            If((buf_in.source.ctrl[0]) & (buf_in.source.data[0:8] == END.value),
                 NextValue(fifo.sink.valid, 0),
                 NextValue(fifo.sink.error, 0),
+                NextState("FIND_DELIMITER"),
             ),
 
             If(sink.ctrl[1] & (sink.data[8:16] == STP.value),
                 NextValue(fifo.sink.valid, 1),
+                NextValue(payload_cnt, 0),
                 NextState("TLP"),
             ),
 
             If(sink.ctrl[1] & (sink.data[8:16] == SDP.value),
                 NextValue(fifo.sink.valid, 1),
+                NextValue(payload_cnt, 0),
                 NextState("DLLP"),
             ),
 
@@ -345,22 +371,27 @@ class Filter(Module, AutoCSR):
         fsmReader.act("FILTER",
             NextValue(source.valid, 0),
             NextValue(source.time, 0),
-            NextValue(fifo.source.ready, 0),
+            NextValue(buf_out.source.ready, 0),
+            NextValue(from_error, 0),
 
-            If(fifo.source.valid,
+            If(from_error,
+                NextValue(buf_out.source.ready, 1),
+            ),
+
+            If(buf_out.source.valid,
 
                 # Don't insert a new timestamp
-                If(last_ts == fifo.source.ts,
+                If(last_ts == buf_out.source.ts,
                     insert_ts.eq(0),
                 ).Else(
                     insert_ts.eq(1),
-                    NextValue(last_ts, fifo.source.ts),
+                    NextValue(last_ts, buf_out.source.ts),
                 ),
 
                 # ---- SKIP ----
-                If(fifo.source.osets & (fifo.source.type == osetsType.SKIP) & (fifo.source.data[8:16] == COM.value),
+                If(buf_out.source.osets & (buf_out.source.type == osetsType.SKIP) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
-                        NextValue(source.data, fifo.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[8:16]),
                         # When this frame is disabled, we need to change last_ts
                         # in order to force ts insertion on the next frame.
                         If(skipEnabled,
@@ -369,20 +400,20 @@ class Filter(Module, AutoCSR):
                         ).Else(
                             NextValue(last_ts, 0),
                         ),
-                        NextValue(fifo.source.ready, 0),
+                        NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.SKIP),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
-                        NextValue(fifo.source.ready, 1),
+                        NextValue(buf_out.source.ready, 1),
                         NextState("SKIP"),
                     )
                 ),
 
                 # ---- FTS ----
-                If(fifo.source.osets & (fifo.source.type == osetsType.FTS) & (fifo.source.data[8:16] == COM.value),
+                If(buf_out.source.osets & (buf_out.source.type == osetsType.FTS) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
-                        NextValue(source.data, fifo.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[8:16]),
                         If(ftsEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
@@ -390,20 +421,20 @@ class Filter(Module, AutoCSR):
                             NextValue(last_ts, 0),
                         ),
 
-                        NextValue(fifo.source.ready, 0),
+                        NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.FTS),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
-                        NextValue(fifo.source.ready, 1),
+                        NextValue(buf_out.source.ready, 1),
                         NextState("FTS"),
                     )
                 ),
 
                 # ---- TS1 ----
-                If(fifo.source.osets & (fifo.source.type == osetsType.TS1) & (fifo.source.data[8:16] == COM.value),
+                If(buf_out.source.osets & (buf_out.source.type == osetsType.TS1) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
-                        NextValue(source.data, fifo.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[8:16]),
                         If(ftsEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
@@ -411,20 +442,20 @@ class Filter(Module, AutoCSR):
                             NextValue(last_ts, 0),
                         ),
 
-                        NextValue(fifo.source.ready, 0),
+                        NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.TS1),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
-                        NextValue(fifo.source.ready, 1),
+                        NextValue(buf_out.source.ready, 1),
                         NextState("TS1"),
                     )
                 ),
 
                 # ---- TS2 ----
-                If(fifo.source.osets & (fifo.source.type == osetsType.TS2) & (fifo.source.data[8:16] == COM.value),
+                If(buf_out.source.osets & (buf_out.source.type == osetsType.TS2) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
-                        NextValue(source.data, fifo.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[8:16]),
                         If(ftsEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
@@ -432,52 +463,52 @@ class Filter(Module, AutoCSR):
                             NextValue(last_ts, 0),
                         ),
 
-                        NextValue(fifo.source.ready, 0),
+                        NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.TS2),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
-                        NextValue(fifo.source.ready, 1),
+                        NextValue(buf_out.source.ready, 1),
                         NextState("TS2"),
                     )
                 ),
 
                 # ---- TLP ----
-                If(fifo.source.ctrl[1] & (fifo.source.data[8:16] == STP.value),
+                If(buf_out.source.ctrl[1] & (buf_out.source.data[8:16] == STP.value),
                     If(insert_ts,
-                        NextValue(source.data, fifo.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[8:16]),
                         If(tlpEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
                         ).Else(
                             NextValue(last_ts, 0),
                         ),
-                        NextValue(fifo.source.ready, 0),
+                        NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.TLP),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
-                        NextValue(fifo.source.ready, 1),
+                        NextValue(buf_out.source.ready, 1),
                         NextState("TLP"),
                     )
                 ),
 
                 # ---- DLLP ----
-                If(fifo.source.ctrl[1] & (fifo.source.data[8:16] == SDP.value),
+                If(buf_out.source.ctrl[1] & (buf_out.source.data[8:16] == SDP.value),
                     If(insert_ts,
-                        NextValue(source.data, fifo.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[8:16]),
                         If(dllpEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
                         ).Else(
                             NextValue(last_ts, 0),
                         ),
-                        NextValue(fifo.source.ready, 0),
+                        NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.DLLP),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
-                        NextValue(fifo.source.ready, 1),
+                        NextValue(buf_out.source.ready, 1),
                         NextState("DLLP"),
                     )
                 )
@@ -492,9 +523,9 @@ class Filter(Module, AutoCSR):
         # *            Insert LSB part of timestamp               *
         # *********************************************************
         fsmReader.act("TIMESTAMP_LSB",
-            NextValue(source.data, fifo.source.ts[0:8]),
+            NextValue(source.data, buf_out.source.ts[0:8]),
             NextValue(count, 0),
-            NextValue(fifo.source.ready, 1),
+            NextValue(buf_out.source.ready, 1),
 
             If((state_after == state.SKIP),
                 If(skipEnabled,
@@ -547,14 +578,14 @@ class Filter(Module, AutoCSR):
         # *            Read a SKIP from the FIFO                  *
         # *********************************************************
         fsmReader.act("SKIP",
-            NextValue(source.data, fifo.source.data),
-            NextValue(source.ctrl, fifo.source.ctrl),
+            NextValue(source.data, buf_out.source.data),
+            NextValue(source.ctrl, buf_out.source.ctrl),
             NextValue(count, count + 1),
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
             If(count == 1,
-                NextValue(fifo.source.ready, 0),
+                NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
             ),
@@ -574,14 +605,14 @@ class Filter(Module, AutoCSR):
         # *            Read a FTS from the FIFO                   *
         # *********************************************************
         fsmReader.act("FTS",
-            NextValue(source.data, fifo.source.data),
-            NextValue(source.ctrl, fifo.source.ctrl),
+            NextValue(source.data, buf_out.source.data),
+            NextValue(source.ctrl, buf_out.source.ctrl),
             NextValue(count, count + 1),
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
             If(count == 1,
-                NextValue(fifo.source.ready, 0),
+                NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
             ),
@@ -601,14 +632,14 @@ class Filter(Module, AutoCSR):
         # *            Read a TS1 from the FIFO                   *
         # *********************************************************
         fsmReader.act("TS1",
-            NextValue(source.data, fifo.source.data),
-            NextValue(source.ctrl, fifo.source.ctrl),
+            NextValue(source.data, buf_out.source.data),
+            NextValue(source.ctrl, buf_out.source.ctrl),
             NextValue(count, count + 1),
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
             If(count == 7,
-                NextValue(fifo.source.ready, 0),
+                NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
             ),
@@ -628,14 +659,14 @@ class Filter(Module, AutoCSR):
         # *            Read a TS2 from the FIFO                   *
         # *********************************************************
         fsmReader.act("TS2",
-            NextValue(source.data, fifo.source.data),
-            NextValue(source.ctrl, fifo.source.ctrl),
+            NextValue(source.data, buf_out.source.data),
+            NextValue(source.ctrl, buf_out.source.ctrl),
             NextValue(count, count + 1),
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
             If(count == 7,
-                NextValue(fifo.source.ready, 0),
+                NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
             ),
@@ -655,16 +686,19 @@ class Filter(Module, AutoCSR):
         # *            Read a TLP from the FIFO                   *
         # *********************************************************
         fsmReader.act("TLP",
-            NextValue(source.data, fifo.source.data),
-            NextValue(source.ctrl, fifo.source.ctrl),
+            NextValue(source.data, buf_out.source.data),
+            NextValue(source.ctrl, buf_out.source.ctrl),
             NextValue(count, count + 1),
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
-            If((fifo.source.ctrl[0] & (fifo.source.data[0:8] == END.value)) | fifo.source.error,
-                NextValue(fifo.source.ready, 1),
+            If((buf_out.source.ctrl[0] & (buf_out.source.data[0:8] == END.value)) | fifo.source.error,
+                NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
+                If(fifo.source.error,
+                    NextValue(from_error, 1),
+                ),
             ),
 
             If(tlpEnabled,
@@ -682,16 +716,19 @@ class Filter(Module, AutoCSR):
         # *            Read a DLLP from the FIFO                  *
         # *********************************************************
         fsmReader.act("DLLP",
-            NextValue(source.data, fifo.source.data),
-            NextValue(source.ctrl, fifo.source.ctrl),
+            NextValue(source.data, buf_out.source.data),
+            NextValue(source.ctrl, buf_out.source.ctrl),
             NextValue(count, count + 1),
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
-            If((fifo.source.ctrl[0] & (fifo.source.data[0:8] == END.value)) | fifo.source.error,
-                NextValue(fifo.source.ready, 1),
+            If((buf_out.source.ctrl[0] & (buf_out.source.data[0:8] == END.value)) | fifo.source.error,
+                NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
+                If(fifo.source.error,
+                    NextValue(from_error, 1),
+                ),
             ),
 
             If(dllpEnabled,
