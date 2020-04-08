@@ -1,0 +1,104 @@
+[*]
+[*] GTKWave Analyzer v3.3.68 (w)1999-2016 BSI
+[*] Wed Apr  8 19:42:40 2020
+[*]
+[dumpfile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/simu/sim.vcd"
+[dumpfile_mtime] "Wed Apr  8 19:34:41 2020"
+[dumpfile_size] 2099805
+[savefile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/simu/wave.gtkw"
+[timestart] 0
+[size] 1920 1121
+[pos] -1 -1
+*-10.622904 3830 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 543
+[signals_width] 406
+[sst_expanded] 1
+[sst_vpaned_height] 348
+@200
+-GTP
+@22
+[color] 2
+streamer_source_payload_data[15:0]
+@28
+[color] 2
+streamer_source_payload_ctrl[1:0]
+@200
+-DESCRAMBLER
+@22
+descrambler_source_payload_data[15:0]
+@28
+descrambler_source_payload_ctrl[1:0]
+@200
+-ALIGNER
+@22
+[color] 3
+aligner_source_payload_data[15:0]
+@28
+[color] 3
+aligner_source_payload_ctrl[1:0]
+[color] 3
+aligner_unaligned
+@200
+-FILTER
+@22
+[color] 7
+filter_source_source_payload_data[15:0]
+@28
+[color] 7
+filter_source_source_payload_ctrl[1:0]
+[color] 7
+filter_source_source_payload_time
+[color] 7
+filter_source_source_valid
+@200
+-TRIGGER
+@22
+[color] 5
+trigger_source_source_payload_data[15:0]
+@28
+[color] 5
+trigger_source_source_payload_ctrl[1:0]
+[color] 5
+trigger_source_source_payload_time
+[color] 5
+trigger_source_source_payload_trig
+[color] 5
+trigger_source_source_valid
+@200
+-RECORDER
+@820
+[color] 6
+ringrecorder_state[111:0]
+@28
+[color] 6
+rx_recorder_start
+@22
+[color] 6
+rx_recorder_count[31:0]
+@800022
+[color] 6
+rx_recorder_source_source_payload_data[255:0]
+#{TIME} (16)rx_recorder_source_source_payload_data[255:0] (17)rx_recorder_source_source_payload_data[255:0] (18)rx_recorder_source_source_payload_data[255:0] (19)rx_recorder_source_source_payload_data[255:0] (20)rx_recorder_source_source_payload_data[255:0] (21)rx_recorder_source_source_payload_data[255:0] (22)rx_recorder_source_source_payload_data[255:0] (23)rx_recorder_source_source_payload_data[255:0] (24)rx_recorder_source_source_payload_data[255:0] (25)rx_recorder_source_source_payload_data[255:0] (26)rx_recorder_source_source_payload_data[255:0] (27)rx_recorder_source_source_payload_data[255:0]
+@1001200
+-group_end
+@800022
+#{TRIG} (28)rx_recorder_source_source_payload_data[255:0] (29)rx_recorder_source_source_payload_data[255:0] (30)rx_recorder_source_source_payload_data[255:0] (31)rx_recorder_source_source_payload_data[255:0] (32)rx_recorder_source_source_payload_data[255:0] (33)rx_recorder_source_source_payload_data[255:0] (34)rx_recorder_source_source_payload_data[255:0] (35)rx_recorder_source_source_payload_data[255:0] (36)rx_recorder_source_source_payload_data[255:0] (37)rx_recorder_source_source_payload_data[255:0] (38)rx_recorder_source_source_payload_data[255:0] (39)rx_recorder_source_source_payload_data[255:0]
+@1001200
+-group_end
+@800022
+#{CTRL} (40)rx_recorder_source_source_payload_data[255:0] (41)rx_recorder_source_source_payload_data[255:0] (42)rx_recorder_source_source_payload_data[255:0] (43)rx_recorder_source_source_payload_data[255:0] (44)rx_recorder_source_source_payload_data[255:0] (45)rx_recorder_source_source_payload_data[255:0] (46)rx_recorder_source_source_payload_data[255:0] (47)rx_recorder_source_source_payload_data[255:0] (48)rx_recorder_source_source_payload_data[255:0] (49)rx_recorder_source_source_payload_data[255:0] (50)rx_recorder_source_source_payload_data[255:0] (51)rx_recorder_source_source_payload_data[255:0] (52)rx_recorder_source_source_payload_data[255:0] (53)rx_recorder_source_source_payload_data[255:0] (54)rx_recorder_source_source_payload_data[255:0] (55)rx_recorder_source_source_payload_data[255:0] (56)rx_recorder_source_source_payload_data[255:0] (57)rx_recorder_source_source_payload_data[255:0] (58)rx_recorder_source_source_payload_data[255:0] (59)rx_recorder_source_source_payload_data[255:0] (60)rx_recorder_source_source_payload_data[255:0] (61)rx_recorder_source_source_payload_data[255:0] (62)rx_recorder_source_source_payload_data[255:0] (63)rx_recorder_source_source_payload_data[255:0]
+@1001200
+-group_end
+@800022
+#{DATA} (64)rx_recorder_source_source_payload_data[255:0] (65)rx_recorder_source_source_payload_data[255:0] (66)rx_recorder_source_source_payload_data[255:0] (67)rx_recorder_source_source_payload_data[255:0] (68)rx_recorder_source_source_payload_data[255:0] (69)rx_recorder_source_source_payload_data[255:0] (70)rx_recorder_source_source_payload_data[255:0] (71)rx_recorder_source_source_payload_data[255:0] (72)rx_recorder_source_source_payload_data[255:0] (73)rx_recorder_source_source_payload_data[255:0] (74)rx_recorder_source_source_payload_data[255:0] (75)rx_recorder_source_source_payload_data[255:0] (76)rx_recorder_source_source_payload_data[255:0] (77)rx_recorder_source_source_payload_data[255:0] (78)rx_recorder_source_source_payload_data[255:0] (79)rx_recorder_source_source_payload_data[255:0] (80)rx_recorder_source_source_payload_data[255:0] (81)rx_recorder_source_source_payload_data[255:0] (82)rx_recorder_source_source_payload_data[255:0] (83)rx_recorder_source_source_payload_data[255:0] (84)rx_recorder_source_source_payload_data[255:0] (85)rx_recorder_source_source_payload_data[255:0] (86)rx_recorder_source_source_payload_data[255:0] (87)rx_recorder_source_source_payload_data[255:0] (88)rx_recorder_source_source_payload_data[255:0] (89)rx_recorder_source_source_payload_data[255:0] (90)rx_recorder_source_source_payload_data[255:0] (91)rx_recorder_source_source_payload_data[255:0] (92)rx_recorder_source_source_payload_data[255:0] (93)rx_recorder_source_source_payload_data[255:0] (94)rx_recorder_source_source_payload_data[255:0] (95)rx_recorder_source_source_payload_data[255:0] (96)rx_recorder_source_source_payload_data[255:0] (97)rx_recorder_source_source_payload_data[255:0] (98)rx_recorder_source_source_payload_data[255:0] (99)rx_recorder_source_source_payload_data[255:0] (100)rx_recorder_source_source_payload_data[255:0] (101)rx_recorder_source_source_payload_data[255:0] (102)rx_recorder_source_source_payload_data[255:0] (103)rx_recorder_source_source_payload_data[255:0] (104)rx_recorder_source_source_payload_data[255:0] (105)rx_recorder_source_source_payload_data[255:0] (106)rx_recorder_source_source_payload_data[255:0] (107)rx_recorder_source_source_payload_data[255:0] (108)rx_recorder_source_source_payload_data[255:0] (109)rx_recorder_source_source_payload_data[255:0] (110)rx_recorder_source_source_payload_data[255:0] (111)rx_recorder_source_source_payload_data[255:0] (112)rx_recorder_source_source_payload_data[255:0] (113)rx_recorder_source_source_payload_data[255:0] (114)rx_recorder_source_source_payload_data[255:0] (115)rx_recorder_source_source_payload_data[255:0] (116)rx_recorder_source_source_payload_data[255:0] (117)rx_recorder_source_source_payload_data[255:0] (118)rx_recorder_source_source_payload_data[255:0] (119)rx_recorder_source_source_payload_data[255:0] (120)rx_recorder_source_source_payload_data[255:0] (121)rx_recorder_source_source_payload_data[255:0] (122)rx_recorder_source_source_payload_data[255:0] (123)rx_recorder_source_source_payload_data[255:0] (124)rx_recorder_source_source_payload_data[255:0] (125)rx_recorder_source_source_payload_data[255:0] (126)rx_recorder_source_source_payload_data[255:0] (127)rx_recorder_source_source_payload_data[255:0] (128)rx_recorder_source_source_payload_data[255:0] (129)rx_recorder_source_source_payload_data[255:0] (130)rx_recorder_source_source_payload_data[255:0] (131)rx_recorder_source_source_payload_data[255:0] (132)rx_recorder_source_source_payload_data[255:0] (133)rx_recorder_source_source_payload_data[255:0] (134)rx_recorder_source_source_payload_data[255:0] (135)rx_recorder_source_source_payload_data[255:0] (136)rx_recorder_source_source_payload_data[255:0] (137)rx_recorder_source_source_payload_data[255:0] (138)rx_recorder_source_source_payload_data[255:0] (139)rx_recorder_source_source_payload_data[255:0] (140)rx_recorder_source_source_payload_data[255:0] (141)rx_recorder_source_source_payload_data[255:0] (142)rx_recorder_source_source_payload_data[255:0] (143)rx_recorder_source_source_payload_data[255:0] (144)rx_recorder_source_source_payload_data[255:0] (145)rx_recorder_source_source_payload_data[255:0] (146)rx_recorder_source_source_payload_data[255:0] (147)rx_recorder_source_source_payload_data[255:0] (148)rx_recorder_source_source_payload_data[255:0] (149)rx_recorder_source_source_payload_data[255:0] (150)rx_recorder_source_source_payload_data[255:0] (151)rx_recorder_source_source_payload_data[255:0] (152)rx_recorder_source_source_payload_data[255:0] (153)rx_recorder_source_source_payload_data[255:0] (154)rx_recorder_source_source_payload_data[255:0] (155)rx_recorder_source_source_payload_data[255:0] (156)rx_recorder_source_source_payload_data[255:0] (157)rx_recorder_source_source_payload_data[255:0] (158)rx_recorder_source_source_payload_data[255:0] (159)rx_recorder_source_source_payload_data[255:0] (160)rx_recorder_source_source_payload_data[255:0] (161)rx_recorder_source_source_payload_data[255:0] (162)rx_recorder_source_source_payload_data[255:0] (163)rx_recorder_source_source_payload_data[255:0] (164)rx_recorder_source_source_payload_data[255:0] (165)rx_recorder_source_source_payload_data[255:0] (166)rx_recorder_source_source_payload_data[255:0] (167)rx_recorder_source_source_payload_data[255:0] (168)rx_recorder_source_source_payload_data[255:0] (169)rx_recorder_source_source_payload_data[255:0] (170)rx_recorder_source_source_payload_data[255:0] (171)rx_recorder_source_source_payload_data[255:0] (172)rx_recorder_source_source_payload_data[255:0] (173)rx_recorder_source_source_payload_data[255:0] (174)rx_recorder_source_source_payload_data[255:0] (175)rx_recorder_source_source_payload_data[255:0] (176)rx_recorder_source_source_payload_data[255:0] (177)rx_recorder_source_source_payload_data[255:0] (178)rx_recorder_source_source_payload_data[255:0] (179)rx_recorder_source_source_payload_data[255:0] (180)rx_recorder_source_source_payload_data[255:0] (181)rx_recorder_source_source_payload_data[255:0] (182)rx_recorder_source_source_payload_data[255:0] (183)rx_recorder_source_source_payload_data[255:0] (184)rx_recorder_source_source_payload_data[255:0] (185)rx_recorder_source_source_payload_data[255:0] (186)rx_recorder_source_source_payload_data[255:0] (187)rx_recorder_source_source_payload_data[255:0] (188)rx_recorder_source_source_payload_data[255:0] (189)rx_recorder_source_source_payload_data[255:0] (190)rx_recorder_source_source_payload_data[255:0] (191)rx_recorder_source_source_payload_data[255:0] (192)rx_recorder_source_source_payload_data[255:0] (193)rx_recorder_source_source_payload_data[255:0] (194)rx_recorder_source_source_payload_data[255:0] (195)rx_recorder_source_source_payload_data[255:0] (196)rx_recorder_source_source_payload_data[255:0] (197)rx_recorder_source_source_payload_data[255:0] (198)rx_recorder_source_source_payload_data[255:0] (199)rx_recorder_source_source_payload_data[255:0] (200)rx_recorder_source_source_payload_data[255:0] (201)rx_recorder_source_source_payload_data[255:0] (202)rx_recorder_source_source_payload_data[255:0] (203)rx_recorder_source_source_payload_data[255:0] (204)rx_recorder_source_source_payload_data[255:0] (205)rx_recorder_source_source_payload_data[255:0] (206)rx_recorder_source_source_payload_data[255:0] (207)rx_recorder_source_source_payload_data[255:0] (208)rx_recorder_source_source_payload_data[255:0] (209)rx_recorder_source_source_payload_data[255:0] (210)rx_recorder_source_source_payload_data[255:0] (211)rx_recorder_source_source_payload_data[255:0] (212)rx_recorder_source_source_payload_data[255:0] (213)rx_recorder_source_source_payload_data[255:0] (214)rx_recorder_source_source_payload_data[255:0] (215)rx_recorder_source_source_payload_data[255:0] (216)rx_recorder_source_source_payload_data[255:0] (217)rx_recorder_source_source_payload_data[255:0] (218)rx_recorder_source_source_payload_data[255:0] (219)rx_recorder_source_source_payload_data[255:0] (220)rx_recorder_source_source_payload_data[255:0] (221)rx_recorder_source_source_payload_data[255:0] (222)rx_recorder_source_source_payload_data[255:0] (223)rx_recorder_source_source_payload_data[255:0] (224)rx_recorder_source_source_payload_data[255:0] (225)rx_recorder_source_source_payload_data[255:0] (226)rx_recorder_source_source_payload_data[255:0] (227)rx_recorder_source_source_payload_data[255:0] (228)rx_recorder_source_source_payload_data[255:0] (229)rx_recorder_source_source_payload_data[255:0] (230)rx_recorder_source_source_payload_data[255:0] (231)rx_recorder_source_source_payload_data[255:0] (232)rx_recorder_source_source_payload_data[255:0] (233)rx_recorder_source_source_payload_data[255:0] (234)rx_recorder_source_source_payload_data[255:0] (235)rx_recorder_source_source_payload_data[255:0] (236)rx_recorder_source_source_payload_data[255:0] (237)rx_recorder_source_source_payload_data[255:0] (238)rx_recorder_source_source_payload_data[255:0] (239)rx_recorder_source_source_payload_data[255:0] (240)rx_recorder_source_source_payload_data[255:0] (241)rx_recorder_source_source_payload_data[255:0] (242)rx_recorder_source_source_payload_data[255:0] (243)rx_recorder_source_source_payload_data[255:0] (244)rx_recorder_source_source_payload_data[255:0] (245)rx_recorder_source_source_payload_data[255:0] (246)rx_recorder_source_source_payload_data[255:0] (247)rx_recorder_source_source_payload_data[255:0] (248)rx_recorder_source_source_payload_data[255:0] (249)rx_recorder_source_source_payload_data[255:0] (250)rx_recorder_source_source_payload_data[255:0] (251)rx_recorder_source_source_payload_data[255:0] (252)rx_recorder_source_source_payload_data[255:0] (253)rx_recorder_source_source_payload_data[255:0] (254)rx_recorder_source_source_payload_data[255:0] (255)rx_recorder_source_source_payload_data[255:0]
+@1001200
+-group_end
+-group_end
+@22
+[color] 6
+rx_recorder_source_source_payload_address[31:0]
+@28
+[color] 6
+rx_recorder_source_source_valid
+[pattern_trace] 1
+[pattern_trace] 0
