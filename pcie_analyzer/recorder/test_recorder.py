@@ -25,21 +25,8 @@ from common import *
 # *                                                       *
 # *********************************************************
 
-def make_data_stride(dataList):
-    data = 0
-    ctrl = 0
-    trig = 0
-    for _trig, _ctrl, _data in dataList:
-        data = (data << 16) + _data
-        ctrl = (ctrl << 2) + _ctrl
-        trig = (trig << 1) + _trig
-    retval = (trig << 216) + (ctrl << 192) + data
-    #print("{:64x}".format(retval))
-    #print("{:3x} {:6x} {:48x}".format(trig, ctrl, data))
-    return retval
-
-def make_data(trig, ctrl, data):
-    return (trig << 18) + (ctrl << 16) + data
+def make_data(time, trig, ctrl, data):
+    return (time << 19) + (trig << 18) + (ctrl << 16) + data
 
 # *********************************************************
 # *                                                       *
@@ -47,121 +34,90 @@ def make_data(trig, ctrl, data):
 # *                                                       *
 # *********************************************************
 
-# data ---------------------+
-# ctrl --------------+      |
-# trig----------+    |      |
-#               |    |      |
-#               v    v      v
-data_stride = [
-    make_data_stride([(1, 0b10, 0xAA00),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (1, 0b01, 0x00BB)]),
-    make_data_stride([(1, 0b10, 0xAA00),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (0, 0b00, 0x0000),
-                      (1, 0b01, 0x00BB)]),
-]
-
-# data ----------------+
-# ctrl ----------+     |
-# trig -------+  |     |
-#             |  |     |
-#             v  v     v
+# data -------------------+
+# ctrl -------------+     |
+# trig ----------+  |     |
+# time -------+  |  |     |
+#             |  |  |     |
+#             v  v  v     v
 data = [
-    make_data(0, 0, 0x1111),
-    make_data(0, 0, 0x1111),
-    make_data(0, 0, 0x1111),
-    make_data(0, 3, 0x1111),
-    make_data(0, 3, 0x1111),
-    make_data(0, 0, 0x1111),
-    make_data(0, 0, 0x1111),
-    make_data(0, 0, 0x1111),
-    make_data(0, 0, 0x1111),
-    make_data(0, 0, 0x1111),
-    make_data(0, 0, 0x1111),
-    make_data(0, 0, 0x1111),
+    make_data(0, 0, 0, 0x1111),
+    make_data(0, 0, 0, 0x1111),
+    make_data(0, 0, 0, 0x1111),
+    make_data(0, 0, 3, 0x1111),
+    make_data(0, 0, 3, 0x1111),
+    make_data(0, 0, 0, 0x1111),
+    make_data(0, 0, 0, 0x1111),
+    make_data(0, 0, 0, 0x1111),
+    make_data(0, 0, 0, 0x1111),
+    make_data(0, 0, 0, 0x1111),
+    make_data(0, 0, 0, 0x1111),
+    make_data(0, 0, 0, 0x1111),
 
-    make_data(0, 0, 0x2222),
-    make_data(0, 0, 0x2222),
-    make_data(0, 0, 0x2222),
-    make_data(0, 0, 0x2222),
-    make_data(0, 0, 0x2222),
-    make_data(0, 0, 0x2222),
-    make_data(0, 1, 0x2222),
-    make_data(0, 3, 0x2222),
-    make_data(0, 3, 0x2222),
-    make_data(0, 3, 0x2222),
-    make_data(0, 0, 0x2222),
-    make_data(0, 0, 0x2222),
+    make_data(0, 0, 0, 0x2222),
+    make_data(0, 0, 0, 0x2222),
+    make_data(0, 0, 0, 0x2222),
+    make_data(0, 0, 0, 0x2222),
+    make_data(0, 0, 0, 0x2222),
+    make_data(0, 0, 0, 0x2222),
+    make_data(0, 0, 1, 0x2222),
+    make_data(0, 0, 3, 0x2222),
+    make_data(0, 0, 3, 0x2222),
+    make_data(0, 0, 3, 0x2222),
+    make_data(0, 0, 0, 0x2222),
+    make_data(0, 0, 0, 0x2222),
 
-    make_data(0, 0, 0x3333),
-    make_data(0, 0, 0x3333),
-    make_data(0, 0, 0x3333),
-    make_data(0, 0, 0x3333),
-    make_data(0, 0, 0x3333),
-    make_data(0, 0, 0x3333),
-    make_data(0, 1, 0x3333),
-    make_data(0, 3, 0x3333),
-    make_data(0, 3, 0x3333),
-    make_data(0, 3, 0x3333),
-    make_data(0, 0, 0x3333),
-    make_data(0, 0, 0x3333),
+    make_data(0, 0, 0, 0x3333),
+    make_data(0, 0, 0, 0x3333),
+    make_data(0, 0, 0, 0x3333),
+    make_data(0, 0, 0, 0x3333),
+    make_data(0, 0, 0, 0x3333),
+    make_data(0, 0, 0, 0x3333),
+    make_data(0, 0, 1, 0x3333),
+    make_data(0, 0, 3, 0x3333),
+    make_data(0, 0, 3, 0x3333),
+    make_data(0, 0, 3, 0x3333),
+    make_data(0, 0, 0, 0x3333),
+    make_data(0, 0, 0, 0x3333),
 
-    make_data(0, 0, 0x4444),
-    make_data(0, 0, 0x4444),
-    make_data(0, 0, 0x4444),
-    make_data(0, 0, 0x4444),
-    make_data(0, 0, 0x4444),
-    make_data(0, 0, 0x4444),
-    make_data(0, 1, 0x4444),
-    make_data(0, 3, 0x4444),
-    make_data(0, 3, 0x4444),
-    make_data(0, 3, 0x4444),
-    make_data(0, 0, 0x4444),
-    make_data(0, 0, 0x4444),
+    make_data(0, 0, 0, 0x4444),
+    make_data(0, 0, 0, 0x4444),
+    make_data(0, 0, 0, 0x4444),
+    make_data(0, 0, 0, 0x4444),
+    make_data(0, 0, 0, 0x4444),
+    make_data(0, 0, 0, 0x4444),
+    make_data(0, 0, 1, 0x4444),
+    make_data(0, 0, 3, 0x4444),
+    make_data(0, 0, 3, 0x4444),
+    make_data(0, 0, 3, 0x4444),
+    make_data(0, 0, 0, 0x4444),
+    make_data(0, 0, 0, 0x4444),
 
-    make_data(0, 0, 0x5555),
-    make_data(0, 0, 0x5555),
-    make_data(0, 0, 0x5555),
-    make_data(0, 0, 0x5555),
-    make_data(0, 0, 0x5555),
-    make_data(0, 0, 0x5555),
-    make_data(0, 1, 0x5555),
-    make_data(0, 3, 0x5555),
-    make_data(0, 3, 0x5555),
-    make_data(0, 3, 0x5555),
-    make_data(0, 0, 0x5555),
-    make_data(0, 0, 0x5555),
+    make_data(0, 0, 0, 0x5555),
+    make_data(0, 0, 0, 0x5555),
+    make_data(0, 0, 0, 0x5555),
+    make_data(0, 0, 0, 0x5555),
+    make_data(0, 0, 0, 0x5555),
+    make_data(0, 0, 0, 0x5555),
+    make_data(0, 0, 1, 0x5555),
+    make_data(0, 0, 3, 0x5555),
+    make_data(0, 0, 3, 0x5555),
+    make_data(0, 0, 3, 0x5555),
+    make_data(0, 0, 0, 0x5555),
+    make_data(0, 0, 0, 0x5555),
 
-    make_data(1, 0, 0x6666),
-    make_data(0, 0, 0x6666),
-    make_data(0, 0, 0x6666),
-    make_data(0, 0, 0x6666),
-    make_data(0, 0, 0x6666),
-    make_data(0, 0, 0x6666),
-    make_data(0, 1, 0x6666),
-    make_data(0, 3, 0x6666),
-    make_data(0, 3, 0x6666),
-    make_data(0, 3, 0x6666),
-    make_data(0, 0, 0x6666),
-    make_data(0, 0, 0x6666),
+    make_data(0, 1, 0, 0x6666),
+    make_data(0, 0, 0, 0x6666),
+    make_data(0, 0, 0, 0x6666),
+    make_data(0, 0, 0, 0x6666),
+    make_data(0, 0, 0, 0x6666),
+    make_data(0, 0, 0, 0x6666),
+    make_data(0, 0, 1, 0x6666),
+    make_data(0, 0, 3, 0x6666),
+    make_data(0, 0, 3, 0x6666),
+    make_data(0, 0, 3, 0x6666),
+    make_data(0, 0, 0, 0x6666),
+    make_data(0, 0, 0, 0x6666),
 
 ]
 
@@ -170,11 +126,14 @@ data_list = []
 def fill_data_list():
     for i in range(2000):
         trig = 0
+        time = 0
+        if i == 220:
+            time = 1
         if i == 250:
             trig = 1
         if i == 1200:
             trig = 1
-        data_list.append(make_data(trig, 0b11, i))
+        data_list.append(make_data(time, trig, 0b11, i))
 
 # *********************************************************
 # *                                                       *
