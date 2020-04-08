@@ -96,7 +96,7 @@ class RingRecorder(Module, AutoCSR):
             self.stride.source.connect(self.fifo.sink),
             source.address.eq(addr[log2_int(addrIncr):32]),
             source.data.eq(self.fifo.source.payload.raw_bits()),
-            self.stride.sink.valid.eq(self.enable),
+            self.stride.sink.valid.eq(self.enable & sink.valid),
         ]
 
         # *********************************************************
