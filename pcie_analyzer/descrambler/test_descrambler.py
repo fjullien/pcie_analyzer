@@ -34,7 +34,7 @@ def load_values(dump):
         values.append((ctrl << 16) + data)
 
 def make_data(ctrl, data):
-    return (ctrl << 16) + data
+    return ((ctrl & 1) << 17)+ ((ctrl >> 1) << 16) + ((data << 8) & 0xff00) + (data >> 8)
 
 # *********************************************************
 # *                                                       *
@@ -51,8 +51,20 @@ gtp_data = [
     make_data(0, 0x0000),
     make_data(0, 0x0000),
     make_data(0, 0x0000),
-    make_data(3, 0xbc1c),
-    make_data(3, 0x1c1c),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
     make_data(0, 0x0000),
     make_data(0, 0x0000),
     make_data(0, 0x0000),
@@ -61,9 +73,28 @@ gtp_data = [
     make_data(0, 0x0000),
     make_data(0, 0x0000),
     make_data(1, 0x00bc),
-    make_data(3, 0x1c1c),
-    make_data(3, 0xbc1c),
-    make_data(3, 0x1c1c),
+    make_data(3, 0xfef7),
+    make_data(0, 0xff02),
+    make_data(0, 0x004a),
+    make_data(0, 0x4a4a),
+    make_data(0, 0x4a4a),
+    make_data(0, 0x4a4a),
+    make_data(0, 0x4a4a),
+    make_data(0, 0x4aac),
+    make_data(0, 0xd7d7),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
+    make_data(0, 0x0000),
     make_data(0, 0x0000),
     make_data(0, 0x0000),
 ]
