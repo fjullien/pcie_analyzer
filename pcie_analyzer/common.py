@@ -72,8 +72,8 @@ def recorder_layout(nb):
     payload = [
         ("data"   , 16 * nb),
         ("ctrl"   , 2 * nb),
-        ("trig"   , nb)
-    #   ("spare"  , xx)
+        ("trig"   , nb),
+        ("time"  , nb)
     ]
     return payload
 
