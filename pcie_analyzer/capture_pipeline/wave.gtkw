@@ -1,0 +1,92 @@
+[*]
+[*] GTKWave Analyzer v3.3.68 (w)1999-2016 BSI
+[*] Fri Apr 10 07:26:35 2020
+[*]
+[dumpfile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/capture_pipeline/sim.vcd"
+[dumpfile_mtime] "Fri Apr 10 07:25:28 2020"
+[dumpfile_size] 2913775
+[savefile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/capture_pipeline/wave.gtkw"
+[timestart] 0
+[size] 1920 1121
+[pos] -1 -1
+*-11.589308 6500 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 437
+[signals_width] 382
+[sst_expanded] 1
+[sst_vpaned_height] 335
+@200
+-GTP
+@22
+[color] 2
+detectorderedsets_sink_payload_data[15:0]
+@28
+[color] 2
+detectorderedsets_sink_payload_ctrl[1:0]
+@200
+-DESCRAMBLER
+@22
+descrambler_source_payload_data[15:0]
+@28
+descrambler_source_payload_ctrl[1:0]
+descrambler_source_payload_osets[1:0]
+@22
+descrambler_source_payload_type[3:0]
+@200
+-ALIGNER
+@23
+[color] 7
+aligner_source_payload_data[15:0]
+@29
+[color] 7
+aligner_source_payload_ctrl[1:0]
+[color] 7
+aligner_source_payload_osets[1:0]
+@23
+[color] 7
+aligner_source_payload_type[3:0]
+@200
+-FILTER
+@22
+[color] 6
+filter_source_source_payload_data[15:0]
+@28
+[color] 6
+filter_source_source_payload_ctrl[1:0]
+[color] 6
+filter_source_source_payload_time
+[color] 6
+filter_source_source_valid
+@200
+-TRIGGER
+@820
+[color] 5
+trigger_state[119:0]
+@22
+[color] 5
+trigger_source_source_payload_data[15:0]
+@28
+[color] 5
+trigger_source_source_payload_ctrl[1:0]
+[color] 5
+trigger_source_source_payload_time
+[color] 5
+trigger_source_source_payload_trig
+[color] 5
+trigger_source_source_valid
+@200
+-RECORDER
+@820
+[color] 3
+ringrecorder_state[111:0]
+@22
+[color] 3
+recorder_source_source_payload_data[255:0]
+[color] 3
+recorder_source_source_payload_address[31:0]
+@28
+[color] 3
+recorder_source_source_valid
+[color] 3
+recorder_source_source_ready
+[pattern_trace] 1
+[pattern_trace] 0
