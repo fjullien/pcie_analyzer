@@ -1,63 +1,38 @@
 [*]
 [*] GTKWave Analyzer v3.3.68 (w)1999-2016 BSI
-[*] Sun Mar 15 21:06:00 2020
+[*] Thu Apr 16 19:43:08 2020
 [*]
-[dumpfile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/filter/sim.vcd"
-[dumpfile_mtime] "Sun Mar 15 21:05:37 2020"
-[dumpfile_size] 98425
-[savefile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/filter/wave.gtkw"
-[timestart] 220
-[size] 1920 1028
-[pos] -1 -1
-*-5.134266 696 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[dumpfile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/aligner/sim.vcd"
+[dumpfile_mtime] "Sun Mar 29 09:06:11 2020"
+[dumpfile_size] 10496
+[savefile] "/home/franck/Dropbox/RTL/analyzer/pcie_analyzer_fj/pcie_analyzer/aligner/wave.gtkw"
+[timestart] 69
+[size] 1920 1121
+[pos] -1 -29
+*-7.134266 2005 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [sst_width] 382
 [signals_width] 330
 [sst_expanded] 1
-[sst_vpaned_height] 303
+[sst_vpaned_height] 706
 @200
 -STREAM IN
-@28
-[color] 2
-sink_sink_valid
-[color] 2
-sink_sink_payload_ctrl[1:0]
 @22
 [color] 2
-sink_sink_payload_data[15:0]
+streamer_source_payload_data[15:0]
 @28
-sink_sink_payload_osets[1:0]
+[color] 2
+streamer_source_payload_ctrl[1:0]
 @200
--FILTER
-@29
-[color] 7
-latency1_source_payload_osets[1:0]
-@28
-[color] 1
-latency2_source_payload_osets[1:0]
-[color] 1
-latency3_source_payload_osets[1:0]
-syncfifo_sink_payload_ctrl[1:0]
+-STREAM OUT
 @22
 [color] 3
-syncfifo_sink_payload_data[15:0]
+aligner_source_payload_data[15:0]
 @28
 [color] 3
-syncfifo_sink_valid
+aligner_source_payload_ctrl[1:0]
 [color] 3
-syncfifo_sink_payload_time
-@820
-state[111:0]
-@22
-[color] 6
-latency1_source_payload_data[15:0]
-[color] 6
-latency2_source_payload_data[15:0]
-[color] 6
-latency3_source_payload_data[15:0]
-@24
-ts0[31:0]
-@28
-latency1_sink_valid
-latency1_source_valid
+aligner_unaligned
+[color] 3
+aligner_unaligned_d
 [pattern_trace] 1
 [pattern_trace] 0
