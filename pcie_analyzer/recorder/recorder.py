@@ -40,7 +40,8 @@ class RingRecorder(Module, AutoCSR):
         self.dw       = CSRConstant(dram_port.data_width)
 
         self.enable   = Signal()          # Signal to enable the trigger
-        self.force    = Signal()          # Another recorder ask us to record datas
+        self.forced   = Signal()          # Another recorder ask us to record datas
+        self.record   = Signal()          # Start the other recorder
 
         self.source = source = stream.Endpoint([("address", dram_port.address_width),
                                                 ("data", dram_port.data_width)])
@@ -50,7 +51,8 @@ class RingRecorder(Module, AutoCSR):
         # *                      Signals                          *
         # *********************************************************
         addr      = Signal(dram_port.address_width)
-        
+        first     = Signal()
+
         _count    = Signal(32)
         _start    = Signal()
         _stop     = Signal()
@@ -59,7 +61,7 @@ class RingRecorder(Module, AutoCSR):
         _offset   = Signal(32)
         _trigAddr = Signal(32)
         _state    = Signal(3)
-        _force    = Signal()
+        _forced   = Signal()
 
         # *********************************************************
         # *                      Constants                        *
@@ -77,7 +79,7 @@ class RingRecorder(Module, AutoCSR):
         self.specials += MultiReg(_trigAddr, self.trigAddr.status, "sys")
         self.specials += MultiReg(_state, self.state.status, "sys")
         self.specials += MultiReg(_count, self.count.status, "sys")
-        self.specials += MultiReg(self.force, _force, clock_domain)
+        self.specials += MultiReg(self.forced, _forced, clock_domain)
 
         # *********************************************************
         # *                     Submodules                        *
@@ -97,6 +99,9 @@ class RingRecorder(Module, AutoCSR):
             source.address.eq(addr[log2_int(addrIncr):32]),
             source.data.eq(self.fifo.source.payload.raw_bits()),
             self.stride.sink.valid.eq(self.enable & sink.valid),
+            source.data[-1].eq(first), # The MSb indicates the start of the recording
+                                       # In case we read data back, and this bit is set, we know
+                                       # we didn't cycle over the circular buffer
         ]
 
         # *********************************************************
@@ -110,15 +115,19 @@ class RingRecorder(Module, AutoCSR):
             self.fifo.reset.eq(1),
             NextValue(addr, base),
             NextValue(_count, 0),
+            NextValue(self.record, 0),
             If(_start,
                 NextValue(_finished, 0),
                 NextValue(self.enable, 1),
-                NextState("FILL_PRE_TRIG")
+                NextState("FILL_PRE_TRIG"),
+                NextValue(self.record, 1),
+                NextValue(first, 1),
             ),
-            If(_force,
+            If(_forced,
                 NextValue(_finished, 0),
                 NextValue(self.enable, 1),
-                NextState("FORCED")
+                NextState("FORCED"),
+                NextValue(first, 1),
             ),
         )
 
@@ -126,7 +135,9 @@ class RingRecorder(Module, AutoCSR):
             _state.eq(1),
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
+
             If(source.valid & source.ready,
+                NextValue(first, 0),
                 NextValue(addr, addr + addrIncr),
                 NextValue(_count, _count + addrIncr),
                 If(_count == _offset,
@@ -196,12 +207,13 @@ class RingRecorder(Module, AutoCSR):
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
+                NextValue(first, 0),
                 NextValue(addr, addr + addrIncr),
                 If(addr == (base + length - addrIncr),
                     NextValue(addr, base),
                 ),
             ),
-            If(_force == 0,
+            If(_forced == 0,
                 NextValue(self.enable, 0),
                 NextValue(_finished, 1),
                 NextState("IDLE"),

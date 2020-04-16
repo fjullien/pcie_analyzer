@@ -168,8 +168,8 @@ class TB(Module):
         self.comb += [
             self.rx_streamer.source.connect(self.rx_recorder.sink),
             self.tx_streamer.source.connect(self.tx_recorder.sink),
-            self.tx_recorder.force.eq(self.rx_recorder.enable),
-            self.rx_recorder.force.eq(self.tx_recorder.enable),
+            self.tx_recorder.forced.eq(self.rx_recorder.record),
+            self.rx_recorder.forced.eq(self.tx_recorder.record),
         ]
 
 # *********************************************************
