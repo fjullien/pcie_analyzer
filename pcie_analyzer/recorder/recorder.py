@@ -9,9 +9,7 @@ from litex.soc.interconnect import stream
 
 from litedram.frontend.dma import LiteDRAMDMAWriter
 
-import sys
-sys.path.append("..")
-from common import *
+from pcie_analyzer.common import *
 
 # *********************************************************
 # *                                                       *

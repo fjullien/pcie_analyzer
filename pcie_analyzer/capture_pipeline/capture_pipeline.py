@@ -9,21 +9,13 @@ from litex.soc.interconnect import stream
 
 from litedram.frontend.dma import LiteDRAMDMAWriter
 
-import sys
-sys.path.append("..")
-from common import *
-sys.path.append("../descrambler")
-from descrambler import *
-sys.path.append("../aligner")
-from aligner import *
-sys.path.append("../filter")
-from filters import *
-sys.path.append("../trigger")
-from trigger import *
-sys.path.append("../recorder")
-from recorder import *
-sys.path.append("../exerciser")
-from exerciser import *
+from pcie_analyzer.common import *
+from pcie_analyzer.descrambler.descrambler import *
+from pcie_analyzer.aligner.aligner import *
+from pcie_analyzer.filter.filters import *
+from pcie_analyzer.trigger.trigger import *
+from pcie_analyzer.recorder.recorder import *
+from pcie_analyzer.exerciser.exerciser import *
 
 # *********************************************************
 # *                                                       *

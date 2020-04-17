@@ -9,11 +9,8 @@ from migen.fhdl import *
 from litex.soc.interconnect.stream import *
 from litex.soc.interconnect.stream_sim import *
 
-from aligner import *
-
-import sys
-sys.path.append("..")
-from common import *
+from pcie_analyzer.aligner.aligner import *
+from pcie_analyzer.common import *
 
 # *********************************************************
 # *                                                       *

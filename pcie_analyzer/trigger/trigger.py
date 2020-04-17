@@ -7,9 +7,7 @@ from migen.genlib.cdc import *
 from litex.soc.interconnect.csr import *
 from litex.soc.interconnect import stream
 
-import sys
-sys.path.append("..")
-from common import *
+from pcie_analyzer.common import *
 
 # *********************************************************
 # *                                                       *

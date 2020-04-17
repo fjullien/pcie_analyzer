@@ -11,10 +11,8 @@ from migen.fhdl import *
 from litex.soc.interconnect.stream import *
 from litex.soc.interconnect.stream_sim import *
 
-from exerciser import *
-
-sys.path.append("../descrambler")
-from descrambler import *
+from pcie_analyzer.exerciser.exerciser import *
+from pcie_analyzer.descrambler.descrambler import *
 
 # *********************************************************
 # *                                                       *

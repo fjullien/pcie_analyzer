@@ -13,10 +13,8 @@ from litex.soc.interconnect.stream_sim import *
 
 from litedram.common import *
 
-import sys
-sys.path.append("..")
-from common import *
-from capture_pipeline import *
+from pcie_analyzer.common import *
+from pcie_analyzer.capture_pipeline.capture_pipeline import *
 
 values=[]
 

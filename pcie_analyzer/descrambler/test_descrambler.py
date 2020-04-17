@@ -11,7 +11,7 @@ from migen.fhdl import *
 from litex.soc.interconnect.stream import *
 from litex.soc.interconnect.stream_sim import *
 
-from descrambler import *
+from pcie_analyzer.descrambler.descrambler import *
 
 values=[]
 

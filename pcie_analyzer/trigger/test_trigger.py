@@ -13,11 +13,8 @@ from litex.soc.interconnect.stream_sim import *
 from litex.soc.interconnect import csr
 from litex.soc.interconnect import csr_bus
 
-from trigger import *
-
-import sys
-sys.path.append("..")
-from common import *
+from pcie_analyzer.trigger.trigger import *
+from pcie_analyzer.common import *
 
 # *********************************************************
 # *                                                       *
