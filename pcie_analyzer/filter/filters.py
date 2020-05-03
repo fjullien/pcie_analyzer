@@ -392,7 +392,7 @@ class Filter(Module, AutoCSR):
                 # ---- SKIP ----
                 If(buf_out.source.osets & (buf_out.source.type == osetsType.SKIP) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
-                        NextValue(source.data, buf_out.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[16:32]),
                         # When this frame is disabled, we need to change last_ts
                         # in order to force ts insertion on the next frame.
                         If(skipEnabled,
@@ -414,7 +414,7 @@ class Filter(Module, AutoCSR):
                 # ---- IDLE ----
                 If(buf_out.source.osets & (buf_out.source.type == osetsType.IDLE) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
-                        NextValue(source.data, buf_out.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[16:32]),
                         # When this frame is disabled, we need to change last_ts
                         # in order to force ts insertion on the next frame.
                         If(idleEnabled,
@@ -436,7 +436,7 @@ class Filter(Module, AutoCSR):
                 # ---- FTS ----
                 If(buf_out.source.osets & (buf_out.source.type == osetsType.FTS) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
-                        NextValue(source.data, buf_out.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[16:32]),
                         If(ftsEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
@@ -457,7 +457,7 @@ class Filter(Module, AutoCSR):
                 # ---- TS1 ----
                 If(buf_out.source.osets & (buf_out.source.type == osetsType.TS1) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
-                        NextValue(source.data, buf_out.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[16:32]),
                         If(ftsEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
@@ -478,7 +478,7 @@ class Filter(Module, AutoCSR):
                 # ---- TS2 ----
                 If(buf_out.source.osets & (buf_out.source.type == osetsType.TS2) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
-                        NextValue(source.data, buf_out.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[16:32]),
                         If(ftsEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
@@ -499,7 +499,7 @@ class Filter(Module, AutoCSR):
                 # ---- TLP ----
                 If(buf_out.source.ctrl[1] & (buf_out.source.data[8:16] == STP.value),
                     If(insert_ts,
-                        NextValue(source.data, buf_out.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[16:32]),
                         If(tlpEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
@@ -519,7 +519,7 @@ class Filter(Module, AutoCSR):
                 # ---- DLLP ----
                 If(buf_out.source.ctrl[1] & (buf_out.source.data[8:16] == SDP.value),
                     If(insert_ts,
-                        NextValue(source.data, buf_out.source.ts[8:16]),
+                        NextValue(source.data, buf_out.source.ts[16:32]),
                         If(dllpEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
@@ -546,7 +546,7 @@ class Filter(Module, AutoCSR):
         # *            Insert LSB part of timestamp               *
         # *********************************************************
         fsmReader.act("TIMESTAMP_LSB",
-            NextValue(source.data, buf_out.source.ts[0:8]),
+            NextValue(source.data, buf_out.source.ts[0:16]),
             NextValue(count, 0),
             NextValue(buf_out.source.ready, 1),
 
