@@ -10,6 +10,8 @@ from litex.soc.interconnect import stream
 from pcie_analyzer.common import *
 from pcie_analyzer.descrambler.descrambler import *
 
+SKIP_INTERVAL = 1400
+
 class Exerciser(Module, AutoCSR):
     def __init__(self, clock_domain, mem_size=128):
 
@@ -62,12 +64,6 @@ class Exerciser(Module, AutoCSR):
             self.source.valid.eq(1),
         ]
 
-        self.sync += [
-                If(_insert == 0,
-                    done.eq(0),
-                )
-        ]
-
         # *********************************************************
         # *                        FSM                            *
         # *********************************************************
@@ -88,7 +84,7 @@ class Exerciser(Module, AutoCSR):
             NextValue(generator.data, free_cnt[0:16]),
             NextValue(generator.ctrl, 0),
             NextState("LSB"),
-            If(symbol_cnt > 100,
+            If(symbol_cnt > SKIP_INTERVAL,
                 NextState("SKIP_LSB"),
             ).Else(
                 NextState("LSB"),
@@ -97,6 +93,9 @@ class Exerciser(Module, AutoCSR):
                 self.rdport.adr.eq(0),
                 NextValue(memory_cnt, 0),
                 NextState("SEND_FRAME"),
+            ),
+            If(~_insert,
+                NextValue(done, 0),
             )
         )
 
