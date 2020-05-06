@@ -24,7 +24,7 @@ from liteeth.phy.s7rgmii import LiteEthPHYRGMII
 from liteeth.core import LiteEthUDPIPCore
 from liteeth.frontend.etherbone import LiteEthEtherbone
 
-from liteiclink.transceiver.gtp_7series import GTPQuadPLL, GTP
+from pcie_analyzer.liteiclink.gtp_7series import GTPQuadPLL, GTP
 
 from pcie_analyzer.capture_pipeline.capture_pipeline import *
 from pcie_analyzer.common import *
@@ -151,6 +151,7 @@ class _CRG(Module):
         self.clock_domains.cd_sys4x     = ClockDomain(reset_less=True)
         self.clock_domains.cd_sys4x_dqs = ClockDomain(reset_less=True)
         self.clock_domains.cd_clk200    = ClockDomain()
+        self.clock_domains.cd_clk125    = ClockDomain()
 
         # # #
 
@@ -165,6 +166,7 @@ class _CRG(Module):
         pll.create_clkout(self.cd_sys4x,     4*sys_clk_freq)
         pll.create_clkout(self.cd_sys4x_dqs, 4*sys_clk_freq, phase=90)
         pll.create_clkout(self.cd_clk200,    200e6)
+        pll.create_clkout(self.cd_clk125,    125e6)
 
         self.submodules.idelayctrl = S7IDELAYCTRL(self.cd_clk200)
 
@@ -228,7 +230,7 @@ class PCIeAnalyzer(SoCSDRAM):
         eth_core = LiteEthUDPIPCore(
             phy         = self.eth_phy,
             mac_address = 0x10e2d5000000,
-            ip_address  = "172.30.28.201",
+            ip_address  = "192.168.1.201",
             clk_freq    = 125000000)
         self.submodules.eth_core = ClockDomainsRenamer("eth_tx")(eth_core)
 
@@ -295,13 +297,27 @@ class PCIeAnalyzer(SoCSDRAM):
                 gtp.cd_rx.clk)
 
         # *********************************************************
+        # *         Capture pipeline clock selection              *
+        # *********************************************************
+        rx_sim = Signal()
+        tx_sim = Signal()
+
+        self.comb += [
+            self.gtp0.simuclk.eq(self.crg.cd_clk125.clk),
+            self.gtp0.clksel.eq(rx_sim),
+
+            self.gtp1.simuclk.eq(self.crg.cd_clk125.clk),
+            self.gtp1.clksel.eq(tx_sim),
+        ]
+
+        # *********************************************************
         # *                      Time base                        *
         # *********************************************************
         time    = Signal(32)
         time_rx = Signal(32)
         time_tx = Signal(32)
 
-        self.sync.gtp0_rx += time.eq(time + 1)
+        self.sync.clk125 += time.eq(time + 1)
         self.specials += MultiReg(time, time_rx, "gtp0_rx")
         self.specials += MultiReg(time, time_tx, "gtp1_rx")
 
@@ -328,11 +344,14 @@ class PCIeAnalyzer(SoCSDRAM):
         self.add_csr("rx_capture_exerciser_mem")
         self.add_csr("rx_capture_trigger_mem")
 
+        pipeline_ready = Signal()
+
         self.comb += [
             self.gtp0.source.connect(self.rx_capture.sink, omit={"valid"}),
-            self.rx_capture.sink.valid.eq(gtp0_ready),
-            self.rx_capture.enable.eq(1),
+            pipeline_ready.eq(gtp0_ready | self.rx_capture.simmode),
+            self.rx_capture.sink.valid.eq(pipeline_ready),
             self.rx_capture.time.eq(time_rx),
+            rx_sim.eq(1), # TODO, control with CSR
         ]
 
         # *********************************************************
@@ -361,8 +380,8 @@ class PCIeAnalyzer(SoCSDRAM):
         self.comb += [
             self.gtp1.source.connect(self.tx_capture.sink, omit={"valid"}),
             self.tx_capture.sink.valid.eq(gtp1_ready),
-            self.tx_capture.enable.eq(1),
             self.tx_capture.time.eq(time_tx),
+            tx_sim.eq(1), # TODO, control with CSR
         ]
 
         # *********************************************************
@@ -405,7 +424,7 @@ class PCIeAnalyzer(SoCSDRAM):
             # ~ self.rx_descrambler.source.data,
             # ~ self.rx_trigger.fsm
         # ~ ]
-        
+
         # ~ self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 4096, clock_domain="gtp0_rx", csr_csv="tools/analyzer.csv")
         # ~ self.add_csr("analyzer")
 
