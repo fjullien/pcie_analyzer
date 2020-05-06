@@ -11,19 +11,10 @@ from migen.fhdl import *
 from litex.soc.interconnect.stream import *
 from litex.soc.interconnect.stream_sim import *
 
-import sys
-sys.path.append("..")
-from common import *
-sys.path.append("../descrambler")
-from descrambler import *
-sys.path.append("../aligner")
-from aligner import *
-sys.path.append("../filter")
-from filters import *
-sys.path.append("../trigger")
-from trigger import *
-sys.path.append("../recorder")
-from recorder import *
+from litedram.common import LiteDRAMNativePort
+
+from pcie_analyzer.capture_pipeline.capture_pipeline import *
+from pcie_analyzer.common import *
 
 values=[]
 
@@ -244,9 +235,9 @@ unfinished_tlp = [
 #  address    --+                   |   |      |
 #               |                   |   |      |
 #               v                   v   v      v
-mem_data =    [(0, make_mem_data(0b01, 0b10, 0x5c11)),
-               (1, make_mem_data(0b11, 0b00, 0x4a4a)),
-               (2, make_mem_data(0b11, 0b00, 0x00BB)),
+mem_data =    [(0, make_mem_data(0b00, 0b11, 0xbc1c)),
+               # ~ (1, make_mem_data(0b11, 0b00, 0x4a4a)),
+               # ~ (2, make_mem_data(0b11, 0b00, 0x00BB)),
 ]
 
 # *********************************************************
@@ -263,17 +254,17 @@ def generates_random_stream(number):
     print("")
 
     for i in range(number):
-        case = random.randint(0, 7)
+        case = random.randint(0, 1)
         if case == 0:
             print("SKIP, ", end = '')
             data_raw += skip
         if case == 1:
-            print("FTS, ", end = '')
-            data_raw += fts
-        if case == 2:
             print("IDLE, ", end = '')
             for k in range(random.randint(1, 128)):
                 data_raw += idle
+        if case == 2:
+            print("FTS, ", end = '')
+            data_raw += fts
         if case == 3:
             print("TLP, ", end = '')
             data_raw += tlp
@@ -308,29 +299,22 @@ STRIDE_MULTIPLIER        = 12
 class TB(Module):
     def __init__(self):
         self.submodules.streamer = PacketStreamer(gtp_layout)
+        self.time = 0
 
-        self.submodules.descrambler = Descrambler("sys")
-        self.submodules.detect = DetectOrderedSets()
-        
-        self.submodules.aligner = Aligner()
-        
-        self.submodules.filter = Filter("sys", 2048)
+        RX_RING_BUFFER_BASE_ADDRESS = 0
+        RX_RING_BUFFER_SIZE         = 0x100000
 
-        self.submodules.trigger = Trigger("sys", 128)
-        self.specials.wrport = self.trigger.mem.get_port(write_capable=True, clock_domain="sys")
+        port = LiteDRAMNativePort("write", address_width=32, data_width=256)
 
-        port = DummyPort(32, 256)
-        self.submodules.rx_recorder = RingRecorder("sys", port, RX_RING_BUFFER_BASE_ADDRESS, RX_RING_BUFFER_SIZE, STRIDE_MULTIPLIER)
+        self.submodules.rx_capture = CapturePipeline("sys",
+                                                     port,
+                                                     RX_RING_BUFFER_BASE_ADDRESS,
+                                                     RX_RING_BUFFER_SIZE)
+
+        self.specials.wrport = self.rx_capture.trigger.mem.get_port(write_capable=True, clock_domain="sys")
 
         self.comb += [
-            self.streamer.source.connect(self.detect.sink),
-            self.detect.source.connect(self.descrambler.sink),
-            self.descrambler.source.connect(self.aligner.sink),
-            self.aligner.source.connect(self.filter.sink),
-            self.filter.source.connect(self.trigger.sink),
-            self.trigger.source.connect(self.rx_recorder.sink),
-            
-            self.rx_recorder.source.ready.eq(1),
+            self.streamer.source.connect(self.rx_capture.sink),
         ]
 
 # *********************************************************
@@ -347,6 +331,9 @@ def main_generator(dut, csv=False):
         gtp_data = generates_random_stream(50)
         packet = Packet(gtp_data)
 
+    # Use embedded exerciser
+    yield from dut.rx_capture.simu.write(1)
+
     # Fill trigger memory
     for (addr, dat) in mem_data:
         yield dut.wrport.adr.eq(addr)
@@ -356,29 +343,28 @@ def main_generator(dut, csv=False):
     yield dut.wrport.we.eq(0)
 
     # Arm trigger
-    yield from dut.trigger.size.write(len(mem_data))
-    yield from dut.trigger.armed.write(1)
+    yield from dut.rx_capture.trigger.size.write(len(mem_data))
+    yield from dut.rx_capture.trigger.armed.write(1)
 
     dut.streamer.send(packet)
 
     # Configure and enable filter
-    yield from dut.filter.filterConfig.write(0xFFFFFFFE)
-    yield from dut.filter.tlpDllpTimeoutCnt.write(32)
-    yield from dut.filter.filterEnable.write(1)
-    yield dut.trigger.enable.eq(1)
+    yield from dut.rx_capture.filter.filterConfig.write(1)
+    yield from dut.rx_capture.filter.tlpDllpTimeoutCnt.write(32)
+    yield from dut.rx_capture.filter.filterEnable.write(1)
 
     # Trigger offset from the storage windows start (a.k.a pre trigger size)
-    yield from dut.rx_recorder.offset.write(0)
+    yield from dut.rx_capture.recorder.offset.write(0)
 
     # Post trigger size
-    yield from dut.rx_recorder.size.write(0x100)
+    yield from dut.rx_capture.recorder.size.write(0x100)
 
     # Start recorder
-    yield from dut.rx_recorder.start.write(1)
+    yield from dut.rx_capture.recorder.start.write(1)
 
     # Time stamp generator for filter
     for i in range(max(len(values), len(gtp_data))):      
-        yield dut.filter.ts.eq((yield dut.filter.ts) + 1)
+        yield dut.rx_capture.time.eq((yield dut.rx_capture.time) + 1)
         yield
 
 # *********************************************************
