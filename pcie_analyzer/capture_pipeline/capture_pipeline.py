@@ -44,18 +44,13 @@ class CapturePipeline(Module, AutoCSR):
 
         self.forced    = Signal()          # Another CapturePipeline ask us to record datas
         self.record    = Signal()          # Ask another CapturePipeline to record datas
-        self.enable    = Signal()          # Enable pipeline
         self.time      = Signal(32)        # Time source
-
-        # *********************************************************
-        # *                      Signals                          *
-        # *********************************************************
-        _simu   = Signal()
+        self.simmode   = Signal()
 
         # *********************************************************
         # *                         CDC                           *
         # *********************************************************
-        self.specials += MultiReg(self.simu.storage, _simu, clock_domain)
+        self.specials += MultiReg(self.simu.storage, self.simmode, clock_domain)
 
         # *********************************************************
         # *                     Submodules                        *
@@ -86,7 +81,7 @@ class CapturePipeline(Module, AutoCSR):
         # *********************************************************
 
         self.comb += [
-            self.multiplexer.sel.eq(_simu),
+            self.multiplexer.sel.eq(self.simmode),
             self.sink.connect(self.multiplexer.sink0),
             self.exerciser.source.connect(self.multiplexer.sink1),
 
@@ -100,14 +95,11 @@ class CapturePipeline(Module, AutoCSR):
             self.filter.ts.eq(self.time),
 
             self.trigger.source.connect(self.recorder.sink),
-            self.trigger.enable.eq(self.recorder.enable),
+            self.trigger.enable.eq(self.recorder.enableTrigger),
 
             self.recorder.source.connect(self.cdc.sink),
             self.recorder.forced.eq(self.forced),
-            self.record.eq(self.record),
-            self.recorder.enable.eq(self.enable),
-
-            self.trigger.enable.eq(self.recorder.enable),
+            self.record.eq(self.recorder.record),
 
             self.cdc.source.connect(self.dma.sink),
         ]
