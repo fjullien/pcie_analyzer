@@ -37,7 +37,7 @@ class RingRecorder(Module, AutoCSR):
         self.nb       = CSRConstant(nb)
         self.dw       = CSRConstant(dram_port.data_width)
 
-        self.enable   = Signal()          # Signal to enable the trigger
+        self.enableTrigger   = Signal()          # Signal to enable the trigger
         self.forced   = Signal()          # Another recorder ask us to record datas
         self.record   = Signal()          # Start the other recorder
 
@@ -96,7 +96,7 @@ class RingRecorder(Module, AutoCSR):
             self.stride.source.connect(self.fifo.sink),
             source.address.eq(addr[log2_int(addrIncr):32]),
             source.data.eq(self.fifo.source.payload.raw_bits()),
-            self.stride.sink.valid.eq(self.enable & sink.valid),
+            self.stride.sink.valid.eq(sink.valid),
             source.data[-1].eq(first), # The MSb indicates the start of the recording
                                        # In case we read data back, and this bit is set, we know
                                        # we didn't cycle over the circular buffer
@@ -109,28 +109,27 @@ class RingRecorder(Module, AutoCSR):
         self.submodules.fsm = ClockDomainsRenamer(clock_domain)(fsm)
 
         fsm.act("IDLE",
-            _state.eq(0),
+            NextValue(_state, 0),
             self.fifo.reset.eq(1),
             NextValue(addr, base),
             NextValue(_count, 0),
             NextValue(self.record, 0),
             If(_start,
                 NextValue(_finished, 0),
-                NextValue(self.enable, 1),
                 NextState("FILL_PRE_TRIG"),
                 NextValue(self.record, 1),
                 NextValue(first, 1),
             ),
             If(_forced,
                 NextValue(_finished, 0),
-                NextValue(self.enable, 1),
+                NextValue(self.enableTrigger, 1),
                 NextState("FORCED"),
                 NextValue(first, 1),
             ),
         )
 
         fsm.act("FILL_PRE_TRIG",
-            _state.eq(1),
+            NextValue(_state, 1),
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
 
@@ -140,13 +139,14 @@ class RingRecorder(Module, AutoCSR):
                 NextValue(_count, _count + addrIncr),
                 If(_count == _offset,
                     NextValue(_count, 0),
+                    NextValue(self.enableTrigger, 1),
                     NextState("WAIT_TRIGGER")
                 )
             )
         )
 
         fsm.act("WAIT_TRIGGER",
-            _state.eq(2),
+            NextValue(_state, 2),
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
@@ -166,7 +166,7 @@ class RingRecorder(Module, AutoCSR):
         )
 
         fsm.act("FILL_POST_TRIG",
-            _state.eq(3),
+            NextValue(_state, 3),
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
@@ -185,8 +185,8 @@ class RingRecorder(Module, AutoCSR):
         )
 
         fsm.act("DONE",
-            _state.eq(4),
-            NextValue(self.enable, 0),
+            NextValue(_state, 4),
+            NextValue(self.enableTrigger, 0),
             NextValue(_finished, 1),
             If(_stop,
                 NextState("IDLE")
@@ -194,14 +194,14 @@ class RingRecorder(Module, AutoCSR):
         )
 
         fsm.act("ABORT",
-            _state.eq(5),
-            NextValue(self.enable, 0),
+            NextValue(_state, 5),
+            NextValue(self.enableTrigger, 0),
             NextValue(_finished, 1),
             NextState("IDLE")
         )
 
         fsm.act("FORCED",
-            _state.eq(6),
+            NextValue(_state, 6),
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
             If(source.valid & source.ready,
@@ -212,7 +212,7 @@ class RingRecorder(Module, AutoCSR):
                 ),
             ),
             If(_forced == 0,
-                NextValue(self.enable, 0),
+                NextValue(self.enableTrigger, 0),
                 NextValue(_finished, 1),
                 NextState("IDLE"),
             )
