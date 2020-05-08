@@ -82,7 +82,7 @@ class RingRecorder(Module, AutoCSR):
         # *********************************************************
         # *                     Submodules                        *
         # *********************************************************
-        stride = stream.StrideConverter(trigger_layout, recorder_layout(nb), reverse=False)
+        stride = ResetInserter()(stream.StrideConverter(trigger_layout, recorder_layout(nb), reverse=False))
         self.submodules.stride = ClockDomainsRenamer(clock_domain)(stride)
 
         fifo = ResetInserter()(stream.SyncFIFO(recorder_layout(nb), 1024, buffered=True))
@@ -119,6 +119,7 @@ class RingRecorder(Module, AutoCSR):
                 NextState("FILL_PRE_TRIG"),
                 NextValue(self.record, 1),
                 NextValue(first, 1),
+                self.stride.reset.eq(1),
             ),
             If(_forced,
                 NextValue(_finished, 0),
@@ -133,14 +134,15 @@ class RingRecorder(Module, AutoCSR):
             source.valid.eq(self.fifo.source.valid),
             self.fifo.source.ready.eq(source.ready),
 
-            If(source.valid & source.ready,
-                NextValue(first, 0),
-                NextValue(addr, addr + addrIncr),
-                NextValue(_count, _count + addrIncr),
-                If(_count == _offset,
-                    NextValue(_count, 0),
-                    NextValue(self.enableTrigger, 1),
-                    NextState("WAIT_TRIGGER")
+            If(_count == _offset,
+                NextValue(_count, 0),
+                NextValue(self.enableTrigger, 1),
+                NextState("WAIT_TRIGGER")
+            ).Else(
+                If(source.valid & source.ready,
+                    NextValue(first, 0),
+                    NextValue(addr, addr + addrIncr),
+                    NextValue(_count, _count + addrIncr),
                 )
             )
         )
