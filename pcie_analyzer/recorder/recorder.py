@@ -82,7 +82,10 @@ class RingRecorder(Module, AutoCSR):
         # *********************************************************
         # *                     Submodules                        *
         # *********************************************************
-        stride = ResetInserter()(stream.StrideConverter(trigger_layout, recorder_layout(nb), reverse=False))
+        layout = trigger_layout
+        layout.remove(("sof", 1))
+        layout.remove(("eof", 1))
+        stride = ResetInserter()(stream.StrideConverter(layout, recorder_layout(nb), reverse=False))
         self.submodules.stride = ClockDomainsRenamer(clock_domain)(stride)
 
         fifo = ResetInserter()(stream.SyncFIFO(recorder_layout(nb), 1024, buffered=True))
@@ -92,7 +95,7 @@ class RingRecorder(Module, AutoCSR):
         # *                    Combinatorial                      *
         # *********************************************************
         self.comb += [
-            sink.connect(self.stride.sink, omit={"valid"}),
+            sink.connect(self.stride.sink, omit={"valid", "sof", "eof"}),
             self.stride.source.connect(self.fifo.sink),
             source.address.eq(addr[log2_int(addrIncr):32]),
             source.data.eq(self.fifo.source.payload.raw_bits()),

@@ -374,6 +374,7 @@ class Filter(Module, AutoCSR):
             NextValue(source.time, 0),
             NextValue(buf_out.source.ready, 0),
             NextValue(from_error, 0),
+            NextValue(source.eof, 0),
 
             If(from_error,
                 NextValue(buf_out.source.ready, 1),
@@ -614,6 +615,10 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+
+            NextValue(source.sof, 0),
+            NextValue(source.eof, 0),
+
             If(count == 1,
                 NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
@@ -621,6 +626,8 @@ class Filter(Module, AutoCSR):
             ),
 
             If(skipEnabled,
+                If(count == 0, NextValue(source.sof, 1)),
+                If(count == 1, NextValue(source.eof, 1)),
                 NextValue(source.valid, 1),
             ).Else(
                 NextValue(source.valid, 0),
@@ -641,13 +648,21 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+
+            NextValue(source.sof, 0),
+            NextValue(source.eof, 0),
+
             If(count == 1,
                 NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
+                NextValue(source.sof, 0),
+                NextValue(source.eof, 1),
                 NextState("FILTER"),
             ),
 
             If(idleEnabled,
+                If(count == 0, NextValue(source.sof, 1)),
+                If(count == 1, NextValue(source.eof, 1)),
                 NextValue(source.valid, 1),
             ).Else(
                 NextValue(source.valid, 0),
@@ -668,13 +683,21 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+
+            NextValue(source.sof, 0),
+            NextValue(source.eof, 0),
+
             If(count == 1,
                 NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
+                NextValue(source.sof, 0),
+                NextValue(source.eof, 1),
                 NextState("FILTER"),
             ),
 
             If(ftsEnabled,
+                If(count == 0, NextValue(source.sof, 1)),
+                If(count == 1, NextValue(source.eof, 1)),
                 NextValue(source.valid, 1),
             ).Else(
                 NextValue(source.valid, 0),
@@ -695,13 +718,21 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+
+            NextValue(source.sof, 0),
+            NextValue(source.eof, 0),
+
             If(count == 7,
                 NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
+                NextValue(source.sof, 0),
+                NextValue(source.eof, 1),
                 NextState("FILTER"),
             ),
 
             If(ts1Enabled,
+                If(count == 0, NextValue(source.sof, 1)),
+                If(count == 7, NextValue(source.eof, 1)),
                 NextValue(source.valid, 1),
             ).Else(
                 NextValue(source.valid, 0),
@@ -722,13 +753,21 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+
+            NextValue(source.sof, 0),
+            NextValue(source.eof, 0),
+
             If(count == 7,
                 NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
+                NextValue(source.sof, 0),
+                NextValue(source.eof, 1),
                 NextState("FILTER"),
             ),
 
             If(ts2Enabled,
+                If(count == 0, NextValue(source.sof, 1)),
+                If(count == 7, NextValue(source.eof, 1)),
                 NextValue(source.valid, 1),
             ).Else(
                 NextValue(source.valid, 0),
@@ -749,7 +788,12 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+
+            NextValue(source.sof, 0),
+            NextValue(source.eof, 0),
+
             If((buf_out.source.ctrl[0] & (buf_out.source.data[0:8] == END.value)) | fifo.source.error,
+                If(tlpEnabled, NextValue(source.eof, 1)),
                 NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
@@ -759,6 +803,7 @@ class Filter(Module, AutoCSR):
             ),
 
             If(tlpEnabled,
+                If(count == 0, NextValue(source.sof, 1)),
                 NextValue(source.valid, 1),
             ).Else(
                 NextValue(source.valid, 0),
@@ -779,7 +824,12 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+
+            NextValue(source.sof, 0),
+            NextValue(source.eof, 0),
+
             If((buf_out.source.ctrl[0] & (buf_out.source.data[0:8] == END.value)) | fifo.source.error,
+                If(dllpEnabled, NextValue(source.eof, 1)),
                 NextValue(buf_out.source.ready, 0),
                 NextValue(source.valid, 0),
                 NextState("FILTER"),
@@ -789,6 +839,7 @@ class Filter(Module, AutoCSR):
             ),
 
             If(dllpEnabled,
+                If(count == 0, NextValue(source.sof, 1)),
                 NextValue(source.valid, 1),
             ).Else(
                 NextValue(source.valid, 0),

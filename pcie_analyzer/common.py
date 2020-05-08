@@ -54,7 +54,9 @@ trigger_layout = [
     ("data"   , 16), # 2 bytes
     ("ctrl"   , 2),  # 2 K symbols flag
     ("trig"   , 1),  # 1 Trigger position indicator
-    ("time"   , 1)   # 1 Time stamp flag
+    ("time"   , 1),  # 1 Time stamp flag
+    ("sof"    , 1),
+    ("eof"    , 1),
 ]
 
 gtp_layout = [
@@ -65,7 +67,9 @@ gtp_layout = [
 filter_layout = [
     ("data"   , 16), # 2 bytes
     ("ctrl"   , 2),  # 2 K symbols flag
-    ("time"   , 1)   # 1 Trigger position indicator
+    ("time"   , 1),  # 1 Trigger position indicator
+    ("sof"    , 1),
+    ("eof"    , 1),
 ]
 
 def recorder_layout(nb):
