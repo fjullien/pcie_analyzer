@@ -28,7 +28,6 @@ class CapturePipeline(Module, AutoCSR):
                        dram_port,
                        ring_buffer_base_address,
                        ring_buffer_size,
-                       stride_multiplier=12,
                        filter_fifo_size=2048,
                        trigger_memory_size=128,
                        cdc_stream_fifo_size=1024):
@@ -44,6 +43,8 @@ class CapturePipeline(Module, AutoCSR):
 
         self.forced    = Signal()          # Another CapturePipeline ask us to record datas
         self.record    = Signal()          # Ask another CapturePipeline to record datas
+        self.trigOut   = Signal()          # Inform another recorder that we trigged
+        self.trigExt   = Signal()          # Another recorder has trigged
         self.time      = Signal(32)        # Time source
         self.simmode   = Signal()
 
@@ -65,8 +66,7 @@ class CapturePipeline(Module, AutoCSR):
         self.submodules.trigger     = Trigger(clock_domain, trigger_memory_size)
         self.submodules.recorder    = RingRecorder(clock_domain, dram_port,
                                                    ring_buffer_base_address,
-                                                   ring_buffer_size,
-                                                   stride_multiplier)
+                                                   ring_buffer_size)
 
         cdc = stream.AsyncFIFO([("address", dram_port.address_width),
                                 ("data",    dram_port.data_width)],
@@ -96,10 +96,13 @@ class CapturePipeline(Module, AutoCSR):
 
             self.trigger.source.connect(self.recorder.sink),
             self.trigger.enable.eq(self.recorder.enableTrigger),
+            self.trigOut.eq(self.trigger.source.trig),
 
             self.recorder.source.connect(self.cdc.sink),
             self.recorder.forced.eq(self.forced),
             self.record.eq(self.recorder.record),
+
+            self.recorder.trigExt.eq(self.trigExt),
 
             self.cdc.source.connect(self.dma.sink),
         ]

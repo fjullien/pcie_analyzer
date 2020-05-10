@@ -11,6 +11,8 @@ from litedram.frontend.dma import LiteDRAMDMAWriter
 
 from pcie_analyzer.common import *
 
+from pcie_analyzer.recorder.stream2 import StrideConverter2
+
 # *********************************************************
 # *                                                       *
 # *                     Recorder                          *
@@ -18,7 +20,7 @@ from pcie_analyzer.common import *
 # *********************************************************
 
 class RingRecorder(Module, AutoCSR):
-    def __init__(self, clock_domain, dram_port, base, length, nb):
+    def __init__(self, clock_domain, dram_port, base, length):
         
         # *********************************************************
         # *                    Interface                          *
@@ -31,15 +33,16 @@ class RingRecorder(Module, AutoCSR):
         self.trigAddr = CSRStatus(32)     # Trigger storage address
         self.state    = CSRStatus(3)      # Etats FSM
         self.count    = CSRStatus(32)     # Post trigger bytes count
+        self.mode     = CSRStorage()      # 0 = RAW, 1 = FRAME
 
         self.base     = CSRConstant(base)
         self.length   = CSRConstant(length)
-        self.nb       = CSRConstant(nb)
         self.dw       = CSRConstant(dram_port.data_width)
 
-        self.enableTrigger   = Signal()          # Signal to enable the trigger
-        self.forced   = Signal()          # Another recorder ask us to record datas
-        self.record   = Signal()          # Start the other recorder
+        self.enableTrigger = Signal()     # Signal to enable the trigger
+        self.forced        = Signal()     # Another recorder ask us to record datas
+        self.record        = Signal()     # Start the other recorder
+        self.trigExt       = Signal()     # Another recorder has trigged
 
         self.source = source = stream.Endpoint([("address", dram_port.address_width),
                                                 ("data", dram_port.data_width)])
@@ -50,7 +53,10 @@ class RingRecorder(Module, AutoCSR):
         # *********************************************************
         addr      = Signal(dram_port.address_width)
         first     = Signal()
+        wait_eof  = Signal()
+        ext_trig  = Signal()
 
+        _trigExt  = Signal()
         _count    = Signal(32)
         _start    = Signal()
         _stop     = Signal()
@@ -60,11 +66,45 @@ class RingRecorder(Module, AutoCSR):
         _trigAddr = Signal(32)
         _state    = Signal(3)
         _forced   = Signal()
+        _mode     = Signal()
 
         # *********************************************************
         # *                      Constants                        *
         # *********************************************************
-        addrIncr = dram_port.data_width//8
+        ADDRINCR = dram_port.data_width//8
+
+        # Count mode
+        RAW_MODE   = 0
+        FRAME_MODE = 1
+
+        # Reserve 5 bits to indicate the number of valid chunks in record
+        VALID_TOKEN_BITS = 5
+
+        # Meta data position in DDR bloc write
+        RECORD_START = -1
+
+        VALID_TOKEN_COUNT_START = RECORD_START
+        VALID_TOKEN_COUNT_START = RECORD_START
+        VALID_TOKEN_COUNT_END = RECORD_START - VALID_TOKEN_BITS
+        VALID_TOKEN_COUNT = slice(VALID_TOKEN_COUNT_END,VALID_TOKEN_COUNT_START)
+
+        TRIG_EXT = VALID_TOKEN_COUNT_END - 1
+
+        print("Memory data width        = {:d} bits".format(dram_port.data_width))
+        
+        # sof and eof are not recorder
+        trigger_nbits = len(stream.Endpoint(trigger_layout).payload.raw_bits()) - 2
+        print("Trigger stream data size = {:d} bits".format(trigger_nbits))
+
+        recorder_reserved_bits = len(first) + VALID_TOKEN_BITS + len(_trigExt)
+
+        data_per_chunk   = (dram_port.data_width - recorder_reserved_bits) // trigger_nbits
+        print("Chunks per block         = {:d} ({:d} bits)".format(data_per_chunk, data_per_chunk * trigger_nbits))
+        print("Bits unused              = {:d}".format(dram_port.data_width - 
+                                                       recorder_reserved_bits -
+                                                       (data_per_chunk * trigger_nbits)))
+
+        self.nb       = CSRConstant(data_per_chunk)
 
         # *********************************************************
         # *                         CDC                           *
@@ -78,31 +118,57 @@ class RingRecorder(Module, AutoCSR):
         self.specials += MultiReg(_state, self.state.status, "sys")
         self.specials += MultiReg(_count, self.count.status, "sys")
         self.specials += MultiReg(self.forced, _forced, clock_domain)
+        self.specials += MultiReg(self.mode.storage, _mode, clock_domain)
+        self.specials += MultiReg(self.trigExt, _trigExt, clock_domain)
 
         # *********************************************************
         # *                     Submodules                        *
         # *********************************************************
-        layout = trigger_layout
-        layout.remove(("sof", 1))
-        layout.remove(("eof", 1))
-        stride = ResetInserter()(stream.StrideConverter(layout, recorder_layout(nb), reverse=False))
+        # Remove sof and eof from trigger_layout
+        fifo_layout = trigger_layout[:-2]
+        
+        stride = ResetInserter()(StrideConverter2(fifo_layout, recorder_layout(data_per_chunk), reverse=False, report_valid_token_count=True))
         self.submodules.stride = ClockDomainsRenamer(clock_domain)(stride)
 
-        fifo = ResetInserter()(stream.SyncFIFO(recorder_layout(nb), 1024, buffered=True))
+        fifo = ResetInserter()(stream.SyncFIFO(fifo_layout, 1024, buffered=True))
         self.submodules.fifo   = ClockDomainsRenamer(clock_domain)(fifo)
+
 
         # *********************************************************
         # *                    Combinatorial                      *
         # *********************************************************
         self.comb += [
-            sink.connect(self.stride.sink, omit={"valid", "sof", "eof"}),
-            self.stride.source.connect(self.fifo.sink),
-            source.address.eq(addr[log2_int(addrIncr):32]),
-            source.data.eq(self.fifo.source.payload.raw_bits()),
-            self.stride.sink.valid.eq(sink.valid),
-            source.data[-1].eq(first), # The MSb indicates the start of the recording
-                                       # In case we read data back, and this bit is set, we know
-                                       # we didn't cycle over the circular buffer
+            sink.connect(self.fifo.sink, omit={"sof", "eof"}),
+            self.fifo.source.connect(self.stride.sink),
+            source.valid.eq(self.stride.source.valid),
+            self.stride.source.ready.eq(source.ready),
+            source.address.eq(addr[log2_int(ADDRINCR):32]),
+            source.data.eq(self.stride.source.payload.raw_bits()),
+
+            source.data[RECORD_START].eq(first), # The MSb indicates the start of the recording
+                                                 # In case we read data back, and this bit is set, we know
+                                                 # we didn't cycle over the circular buffer
+
+            source.data[VALID_TOKEN_COUNT].eq(stride.valid_token_count),
+            source.data[TRIG_EXT].eq(ext_trig),
+            
+            
+        ]
+
+        # *********************************************************
+        # *                    Synchronous                        *
+        # *********************************************************
+        self.sync += [
+            If(stride.source.valid & stride.source.ready,
+                first.eq(0),
+                ext_trig.eq(0),
+                addr.eq(addr + ADDRINCR),
+            ),
+            If(addr == (base + length - ADDRINCR), addr.eq(base)),
+            If(_trigExt & (_state == 6),
+                ext_trig.eq(1),
+                _trigAddr.eq(addr),
+            ),
         ]
 
         # *********************************************************
@@ -113,53 +179,54 @@ class RingRecorder(Module, AutoCSR):
 
         fsm.act("IDLE",
             NextValue(_state, 0),
-            self.fifo.reset.eq(1),
+            NextValue(self.fifo.reset, 1),
             NextValue(addr, base),
             NextValue(_count, 0),
             NextValue(self.record, 0),
+            NextValue(wait_eof, 0),
+            NextValue(first, 1),
+
             If(_start,
                 NextValue(_finished, 0),
                 NextState("FILL_PRE_TRIG"),
                 NextValue(self.record, 1),
-                NextValue(first, 1),
                 self.stride.reset.eq(1),
             ),
             If(_forced,
                 NextValue(_finished, 0),
-                NextValue(self.enableTrigger, 1),
+                self.stride.reset.eq(1),
                 NextState("FORCED"),
-                NextValue(first, 1),
             ),
         )
 
         fsm.act("FILL_PRE_TRIG",
             NextValue(_state, 1),
-            source.valid.eq(self.fifo.source.valid),
-            self.fifo.source.ready.eq(source.ready),
+            NextValue(self.fifo.reset, 0),
 
             If(_count == _offset,
                 NextValue(_count, 0),
                 NextValue(self.enableTrigger, 1),
                 NextState("WAIT_TRIGGER")
             ).Else(
-                If(source.valid & source.ready,
-                    NextValue(first, 0),
-                    NextValue(addr, addr + addrIncr),
-                    NextValue(_count, _count + addrIncr),
+                If(fifo.sink.ready & sink.valid,
+                    If(_mode == RAW_MODE,
+                        NextValue(_count, _count + 1),
+                    ).Else(
+                        If(sink.sof, NextValue(wait_eof, 1)),
+                        If(sink.eof & wait_eof,
+                            NextValue(wait_eof, 0),
+                            NextValue(_count, _count + 1),
+                        )
+                    )
                 )
             )
         )
 
         fsm.act("WAIT_TRIGGER",
             NextValue(_state, 2),
-            source.valid.eq(self.fifo.source.valid),
-            self.fifo.source.ready.eq(source.ready),
-            If(source.valid & source.ready,
-                NextValue(addr, addr + addrIncr),
-                If(addr == (base + length - addrIncr),
-                    NextValue(addr, base),
-                ),
-                If(self.fifo.source.trig != 0,
+
+            If(fifo.sink.ready & sink.valid,
+                If(sink.trig,
                     NextValue(_count, 0),
                     NextValue(_trigAddr, addr),
                     NextState("FILL_POST_TRIG")
@@ -172,18 +239,23 @@ class RingRecorder(Module, AutoCSR):
 
         fsm.act("FILL_POST_TRIG",
             NextValue(_state, 3),
-            source.valid.eq(self.fifo.source.valid),
-            self.fifo.source.ready.eq(source.ready),
-            If(source.valid & source.ready,
-                NextValue(addr, addr + addrIncr),
-                If(addr == (base + length - addrIncr),
-                    NextValue(addr, base),
-                ),
-                NextValue(_count, _count + addrIncr),
-                If(_count == _size,
-                    NextState("DONE")
+
+            If(_count == _size,
+                NextState("DONE")
+            ).Else(
+                If(fifo.sink.ready & sink.valid,
+                    If(_mode == RAW_MODE,
+                        NextValue(_count, _count + 1),
+                    ).Else(
+                        If(sink.sof, NextValue(wait_eof, 1)),
+                        If(sink.eof & wait_eof,
+                            NextValue(wait_eof, 0),
+                            NextValue(_count, _count + 1),
+                        )
+                    )
                 )
             ),
+
             If(_stop,
                 NextState("ABORT")
             )
@@ -193,6 +265,9 @@ class RingRecorder(Module, AutoCSR):
             NextValue(_state, 4),
             NextValue(self.enableTrigger, 0),
             NextValue(_finished, 1),
+            NextValue(self.fifo.reset, 1),
+            NextValue(self.record, 0),
+            stride.sink.last.eq(1),
             If(_stop,
                 NextState("IDLE")
             )
@@ -202,23 +277,20 @@ class RingRecorder(Module, AutoCSR):
             NextValue(_state, 5),
             NextValue(self.enableTrigger, 0),
             NextValue(_finished, 1),
+            NextValue(self.fifo.reset, 1),
+            NextValue(self.record, 0),
+            stride.sink.last.eq(1),
             NextState("IDLE")
         )
 
         fsm.act("FORCED",
             NextValue(_state, 6),
-            source.valid.eq(self.fifo.source.valid),
-            self.fifo.source.ready.eq(source.ready),
-            If(source.valid & source.ready,
-                NextValue(first, 0),
-                NextValue(addr, addr + addrIncr),
-                If(addr == (base + length - addrIncr),
-                    NextValue(addr, base),
-                ),
-            ),
+            NextValue(self.fifo.reset, 0),
             If(_forced == 0,
                 NextValue(self.enableTrigger, 0),
                 NextValue(_finished, 1),
+                NextValue(self.fifo.reset, 1),
+                stride.sink.last.eq(1),
                 NextState("IDLE"),
             )
         )
