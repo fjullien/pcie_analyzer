@@ -254,7 +254,7 @@ def generates_random_stream(number):
     print("")
 
     for i in range(number):
-        case = random.randint(0, 1)
+        case = random.randint(0, 6)
         if case == 0:
             print("SKIP, ", end = '')
             data_raw += skip
@@ -290,31 +290,51 @@ def generates_random_stream(number):
 
     return data_raw
 
-RX_RING_BUFFER_BASE_ADDRESS = 0
-RX_RING_BUFFER_SIZE         = 0x1000
-
-# Number of trigger_layout we want to put in recorder_layout
-STRIDE_MULTIPLIER        = 12
-
 class TB(Module):
     def __init__(self):
-        self.submodules.streamer = PacketStreamer(gtp_layout)
+        self.submodules.rx_streamer = PacketStreamer(gtp_layout)
+        self.submodules.tx_streamer = PacketStreamer(gtp_layout)
         self.time = 0
 
+        # ---------- RX -------------
         RX_RING_BUFFER_BASE_ADDRESS = 0
         RX_RING_BUFFER_SIZE         = 0x100000
 
-        port = LiteDRAMNativePort("write", address_width=32, data_width=256)
+        rx_port = LiteDRAMNativePort("write", address_width=32, data_width=256)
 
         self.submodules.rx_capture = CapturePipeline("sys",
-                                                     port,
+                                                     rx_port,
                                                      RX_RING_BUFFER_BASE_ADDRESS,
                                                      RX_RING_BUFFER_SIZE)
 
-        self.specials.wrport = self.rx_capture.trigger.mem.get_port(write_capable=True, clock_domain="sys")
+        self.specials.rx_trig_wrport = self.rx_capture.trigger.mem.get_port(write_capable=True, clock_domain="sys")
+
+        # ---------- TX -------------
+        TX_RING_BUFFER_BASE_ADDRESS = 0x100000
+        TX_RING_BUFFER_SIZE         = 0x100000
+
+        tx_port = LiteDRAMNativePort("write", address_width=32, data_width=256)
+
+        self.submodules.tx_capture = CapturePipeline("sys",
+                                                     tx_port,
+                                                     TX_RING_BUFFER_BASE_ADDRESS,
+                                                     TX_RING_BUFFER_SIZE)
+
+        self.specials.tx_trig_wrport = self.tx_capture.trigger.mem.get_port(write_capable=True, clock_domain="sys")
 
         self.comb += [
-            self.streamer.source.connect(self.rx_capture.sink),
+            self.tx_capture.forced.eq(self.rx_capture.record),
+            self.rx_capture.forced.eq(self.tx_capture.record),
+            
+            self.tx_capture.trigExt.eq(self.rx_capture.trigOut),
+            self.rx_capture.trigExt.eq(self.tx_capture.trigOut),
+
+            self.rx_streamer.source.connect(self.rx_capture.sink),
+            self.tx_streamer.source.connect(self.tx_capture.sink),
+            
+            
+            
+            
         ]
 
 # *********************************************************
@@ -328,43 +348,56 @@ def main_generator(dut, csv=False):
         load_values("./reset.csv")
         packet = Packet(values)
     else:
-        gtp_data = generates_random_stream(50)
-        packet = Packet(gtp_data)
+        gtp_rx_data = generates_random_stream(50)
+        rx_packet = Packet(gtp_rx_data)
+        gtp_tx_data = generates_random_stream(50)
+        tx_packet = Packet(gtp_tx_data)
 
-    # Use embedded exerciser
-    yield from dut.rx_capture.simu.write(1)
+    yield from dut.rx_capture.simu.write(0)
+    yield from dut.tx_capture.simu.write(0)
 
     # Fill trigger memory
     for (addr, dat) in mem_data:
-        yield dut.wrport.adr.eq(addr)
-        yield dut.wrport.dat_w.eq(dat)
-        yield dut.wrport.we.eq(1)
+        yield dut.rx_trig_wrport.adr.eq(addr)
+        yield dut.rx_trig_wrport.dat_w.eq(dat)
+        yield dut.rx_trig_wrport.we.eq(1)
         yield
-    yield dut.wrport.we.eq(0)
+    yield dut.rx_trig_wrport.we.eq(0)
 
     # Arm trigger
     yield from dut.rx_capture.trigger.size.write(len(mem_data))
     yield from dut.rx_capture.trigger.armed.write(1)
 
-    dut.streamer.send(packet)
-
+    dut.rx_streamer.send(rx_packet)
+    dut.tx_streamer.send(tx_packet)
+ 
     # Configure and enable filter
-    yield from dut.rx_capture.filter.filterConfig.write(1)
+    yield from dut.rx_capture.filter.filterConfig.write(0xffffffff)
     yield from dut.rx_capture.filter.tlpDllpTimeoutCnt.write(32)
     yield from dut.rx_capture.filter.filterEnable.write(1)
 
+    yield from dut.tx_capture.filter.filterConfig.write(0xffffffff)
+    yield from dut.tx_capture.filter.tlpDllpTimeoutCnt.write(32)
+    yield from dut.tx_capture.filter.filterEnable.write(1)
+
+    # Record mod 0 = RAW, 1 = FRAME
+    yield from dut.rx_capture.recorder.mode.write(1)
+
     # Trigger offset from the storage windows start (a.k.a pre trigger size)
-    yield from dut.rx_capture.recorder.offset.write(0)
+    yield from dut.rx_capture.recorder.offset.write(10)
 
     # Post trigger size
-    yield from dut.rx_capture.recorder.size.write(0x100)
+    yield from dut.rx_capture.recorder.size.write(10)
 
     # Start recorder
     yield from dut.rx_capture.recorder.start.write(1)
 
     # Time stamp generator for filter
-    for i in range(max(len(values), len(gtp_data))):      
+    for i in range(max(len(values), len(gtp_rx_data))):      
         yield dut.rx_capture.time.eq((yield dut.rx_capture.time) + 1)
+        yield dut.tx_capture.time.eq((yield dut.tx_capture.time) + 1)
+ #       if i == 200:
+ #           yield from dut.rx_capture.recorder.stop.write(1)
         yield
 
 # *********************************************************
@@ -377,7 +410,8 @@ if __name__ == "__main__":
     tb = TB()
     generators = {
         "sys" :   [main_generator(tb, csv=False),
-                   tb.streamer.generator()]
+                   tb.rx_streamer.generator(),
+                   tb.tx_streamer.generator()]
     }
     clocks = {"sys": 10}
 

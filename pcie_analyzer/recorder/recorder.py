@@ -10,7 +10,6 @@ from litex.soc.interconnect import stream
 from litedram.frontend.dma import LiteDRAMDMAWriter
 
 from pcie_analyzer.common import *
-
 from pcie_analyzer.recorder.stream2 import StrideConverter2
 
 # *********************************************************
@@ -21,7 +20,7 @@ from pcie_analyzer.recorder.stream2 import StrideConverter2
 
 class RingRecorder(Module, AutoCSR):
     def __init__(self, clock_domain, dram_port, base, length):
-        
+
         # *********************************************************
         # *                    Interface                          *
         # *********************************************************
@@ -91,7 +90,7 @@ class RingRecorder(Module, AutoCSR):
         TRIG_EXT = VALID_TOKEN_COUNT_END - 1
 
         print("Memory data width        = {:d} bits".format(dram_port.data_width))
-        
+
         # sof and eof are not recorder
         trigger_nbits = len(stream.Endpoint(trigger_layout).payload.raw_bits()) - 2
         print("Trigger stream data size = {:d} bits".format(trigger_nbits))
@@ -100,7 +99,7 @@ class RingRecorder(Module, AutoCSR):
 
         data_per_chunk   = (dram_port.data_width - recorder_reserved_bits) // trigger_nbits
         print("Chunks per block         = {:d} ({:d} bits)".format(data_per_chunk, data_per_chunk * trigger_nbits))
-        print("Bits unused              = {:d}".format(dram_port.data_width - 
+        print("Bits unused              = {:d}".format(dram_port.data_width -
                                                        recorder_reserved_bits -
                                                        (data_per_chunk * trigger_nbits)))
 
@@ -126,13 +125,12 @@ class RingRecorder(Module, AutoCSR):
         # *********************************************************
         # Remove sof and eof from trigger_layout
         fifo_layout = trigger_layout[:-2]
-        
+
         stride = ResetInserter()(StrideConverter2(fifo_layout, recorder_layout(data_per_chunk), reverse=False, report_valid_token_count=True))
         self.submodules.stride = ClockDomainsRenamer(clock_domain)(stride)
 
         fifo = ResetInserter()(stream.SyncFIFO(fifo_layout, 1024, buffered=True))
         self.submodules.fifo   = ClockDomainsRenamer(clock_domain)(fifo)
-
 
         # *********************************************************
         # *                    Combinatorial                      *
@@ -151,8 +149,6 @@ class RingRecorder(Module, AutoCSR):
 
             source.data[VALID_TOKEN_COUNT].eq(stride.valid_token_count),
             source.data[TRIG_EXT].eq(ext_trig),
-            
-            
         ]
 
         # *********************************************************
