@@ -28,7 +28,7 @@ class RingRecorder(Module, AutoCSR):
         self.stop     = CSR()             # Stop recorder
         self.finished = CSRStatus()       # Capture finished
         self.size     = CSRStorage(32)    # Post trigger size
-        self.offset   = CSRStorage(32)    # Trigger offset
+        self.offset   = CSRStorage(32)    # Trigger offset (Pre trigger size)
         self.trigAddr = CSRStatus(32)     # Trigger storage address
         self.state    = CSRStatus(3)      # Etats FSM
         self.count    = CSRStatus(32)     # Post trigger bytes count
@@ -137,11 +137,11 @@ class RingRecorder(Module, AutoCSR):
         # *********************************************************
         self.comb += [
             sink.connect(self.fifo.sink, omit={"sof", "eof"}),
-            self.fifo.source.connect(self.stride.sink),
-            source.valid.eq(self.stride.source.valid),
-            self.stride.source.ready.eq(source.ready),
+            self.fifo.source.connect(stride.sink),
+            source.valid.eq(stride.source.valid),
+            stride.source.ready.eq(source.ready),
             source.address.eq(addr[log2_int(ADDRINCR):32]),
-            source.data.eq(self.stride.source.payload.raw_bits()),
+            source.data.eq(stride.source.payload.raw_bits()),
 
             source.data[RECORD_START].eq(first), # The MSb indicates the start of the recording
                                                  # In case we read data back, and this bit is set, we know
@@ -154,16 +154,22 @@ class RingRecorder(Module, AutoCSR):
         # *********************************************************
         # *                    Synchronous                        *
         # *********************************************************
-        self.sync += [
+        sync = getattr(self.sync, clock_domain)
+        sync += [
+            # DRAM address increment
             If(stride.source.valid & stride.source.ready,
                 first.eq(0),
                 ext_trig.eq(0),
                 addr.eq(addr + ADDRINCR),
             ),
+            # DRAM address wrap
             If(addr == (base + length - ADDRINCR), addr.eq(base)),
-            If(_trigExt & (_state == 6),
-                ext_trig.eq(1),
-                _trigAddr.eq(addr),
+            
+            If(_trigExt & (_state == 6), ext_trig.eq(1)),
+            
+            If(_state == 0,
+                addr.eq(base),
+                first.eq(1),
             ),
         ]
 
@@ -176,21 +182,19 @@ class RingRecorder(Module, AutoCSR):
         fsm.act("IDLE",
             NextValue(_state, 0),
             NextValue(self.fifo.reset, 1),
-            NextValue(addr, base),
             NextValue(_count, 0),
             NextValue(self.record, 0),
             NextValue(wait_eof, 0),
-            NextValue(first, 1),
 
             If(_start,
                 NextValue(_finished, 0),
                 NextState("FILL_PRE_TRIG"),
                 NextValue(self.record, 1),
-                self.stride.reset.eq(1),
+                stride.reset.eq(1),
             ),
             If(_forced,
                 NextValue(_finished, 0),
-                self.stride.reset.eq(1),
+                stride.reset.eq(1),
                 NextState("FORCED"),
             ),
         )
@@ -282,6 +286,7 @@ class RingRecorder(Module, AutoCSR):
         fsm.act("FORCED",
             NextValue(_state, 6),
             NextValue(self.fifo.reset, 0),
+            If(_trigExt, NextValue(_trigAddr, addr)),
             If(_forced == 0,
                 NextValue(self.enableTrigger, 0),
                 NextValue(_finished, 1),
