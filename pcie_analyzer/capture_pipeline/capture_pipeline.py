@@ -84,6 +84,7 @@ class CapturePipeline(Module, AutoCSR):
             self.multiplexer.sel.eq(self.simmode),
             self.sink.connect(self.multiplexer.sink0),
             self.exerciser.source.connect(self.multiplexer.sink1),
+            self.exerciser.time.eq(self.time),
 
             self.multiplexer.source.connect(self.detect.sink),
 

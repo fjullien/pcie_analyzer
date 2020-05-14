@@ -21,6 +21,7 @@ class Exerciser(Module, AutoCSR):
         self.insert = CSRStorage()
         self.size   = CSRStorage(8)   # Pattern size - 1
 
+        self.time   = Signal(32)
         self.source = source = stream.Endpoint(gtp_layout)
 
         # *********************************************************
@@ -72,7 +73,7 @@ class Exerciser(Module, AutoCSR):
 
         fsm.act("LSB",
             NextValue(symbol_cnt, symbol_cnt + 1),
-            NextValue(generator.data, free_cnt[15:32]),
+            NextValue(generator.data, self.time[15:32]),
             NextValue(generator.ctrl, 0),
             NextValue(generator.osets, 0),
             NextState("MSB"),
@@ -80,8 +81,7 @@ class Exerciser(Module, AutoCSR):
 
         fsm.act("MSB",
             NextValue(symbol_cnt, symbol_cnt + 1),
-            NextValue(free_cnt, free_cnt + 1),
-            NextValue(generator.data, free_cnt[0:16]),
+            NextValue(generator.data, self.time[0:16]),
             NextValue(generator.ctrl, 0),
             NextState("LSB"),
             If(symbol_cnt > SKIP_INTERVAL,
