@@ -351,7 +351,7 @@ class PCIeAnalyzer(SoCSDRAM):
             pipeline_ready.eq(gtp0_ready | self.rx_capture.simmode),
             self.rx_capture.sink.valid.eq(pipeline_ready),
             self.rx_capture.time.eq(time_rx),
-            rx_sim.eq(1), # TODO, control with CSR
+            rx_sim.eq(self.rx_capture.simu.storage),
         ]
 
         # *********************************************************
@@ -381,7 +381,7 @@ class PCIeAnalyzer(SoCSDRAM):
             self.gtp1.source.connect(self.tx_capture.sink, omit={"valid"}),
             self.tx_capture.sink.valid.eq(gtp1_ready),
             self.tx_capture.time.eq(time_tx),
-            tx_sim.eq(1), # TODO, control with CSR
+            tx_sim.eq(self.tx_capture.simu.storage),
         ]
 
         # *********************************************************
@@ -390,6 +390,8 @@ class PCIeAnalyzer(SoCSDRAM):
         self.comb += [
             self.tx_capture.forced.eq(self.rx_capture.record),
             self.rx_capture.forced.eq(self.tx_capture.record),
+            self.tx_capture.trigExt.eq(self.rx_capture.trigOut),
+            self.rx_capture.trigExt.eq(self.tx_capture.trigOut),
         ]
 
         # *********************************************************
