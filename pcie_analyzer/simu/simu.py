@@ -353,8 +353,11 @@ def main_generator(dut, csv=False):
         gtp_tx_data = generates_random_stream(50)
         tx_packet = Packet(gtp_tx_data)
 
-    yield from dut.rx_capture.simu.write(0)
-    yield from dut.tx_capture.simu.write(0)
+    dut.rx_streamer.send(rx_packet)
+    dut.tx_streamer.send(tx_packet)
+
+    yield from dut.rx_capture.simu.write(1)
+    yield from dut.tx_capture.simu.write(1)
 
     # Fill trigger memory
     for (addr, dat) in mem_data:
@@ -367,9 +370,52 @@ def main_generator(dut, csv=False):
     # Arm trigger
     yield from dut.rx_capture.trigger.size.write(len(mem_data))
     yield from dut.rx_capture.trigger.armed.write(1)
+ 
+    # Configure and enable filter
+    yield from dut.rx_capture.filter.filterConfig.write(0xffffffff)
+    yield from dut.rx_capture.filter.tlpDllpTimeoutCnt.write(32)
+    yield from dut.rx_capture.filter.filterEnable.write(1)
 
-    dut.rx_streamer.send(rx_packet)
-    dut.tx_streamer.send(tx_packet)
+    yield from dut.tx_capture.filter.filterConfig.write(0xffffffff)
+    yield from dut.tx_capture.filter.tlpDllpTimeoutCnt.write(32)
+    yield from dut.tx_capture.filter.filterEnable.write(1)
+
+    # Record mod 0 = RAW, 1 = FRAME
+    yield from dut.rx_capture.recorder.mode.write(1)
+
+    # Trigger offset from the storage windows start (a.k.a pre trigger size)
+    yield from dut.rx_capture.recorder.offset.write(10)
+
+    # Post trigger size
+    yield from dut.rx_capture.recorder.size.write(10)
+
+    # Start recorder
+    yield from dut.rx_capture.recorder.start.write(1)
+
+    # Time stamp generator for filter
+    for i in range(max(len(values), len(gtp_rx_data))):      
+        yield dut.rx_capture.time.eq((yield dut.rx_capture.time) + 1)
+        yield dut.tx_capture.time.eq((yield dut.tx_capture.time) + 1)
+ #       if i == 200:
+ #           yield from dut.rx_capture.recorder.stop.write(1)
+        yield
+
+    yield from dut.rx_capture.recorder.stop.write(1)
+
+    yield from dut.rx_capture.simu.write(1)
+    yield from dut.tx_capture.simu.write(1)
+
+    # Fill trigger memory
+    for (addr, dat) in mem_data:
+        yield dut.rx_trig_wrport.adr.eq(addr)
+        yield dut.rx_trig_wrport.dat_w.eq(dat)
+        yield dut.rx_trig_wrport.we.eq(1)
+        yield
+    yield dut.rx_trig_wrport.we.eq(0)
+
+    # Arm trigger
+    yield from dut.rx_capture.trigger.size.write(len(mem_data))
+    yield from dut.rx_capture.trigger.armed.write(1)
  
     # Configure and enable filter
     yield from dut.rx_capture.filter.filterConfig.write(0xffffffff)
