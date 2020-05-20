@@ -77,7 +77,9 @@ def recorder_layout(nb):
         ("data"   , 16 * nb),
         ("ctrl"   , 2 * nb),
         ("trig"   , nb),
-        ("time"  , nb)
+        ("time"  , nb),
+        ("sof"   , nb),
+        ("eof"   , nb)
     ]
     return payload
 
