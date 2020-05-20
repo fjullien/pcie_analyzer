@@ -183,6 +183,10 @@ tlp = [
         make_data(0, 0xAAAA),
         make_data(0, 0x1111),
         make_data(0, 0x2222),
+        make_data(0, 0xAAAA),
+        make_data(0, 0xAAAA),
+        make_data(0, 0x1111),
+        make_data(0, 0x2222),
         make_data(0, 0x3333),
         make_data(0, 0x0000),
         make_data(0, 0xAABB),
@@ -235,7 +239,7 @@ unfinished_tlp = [
 #  address    --+                   |   |      |
 #               |                   |   |      |
 #               v                   v   v      v
-mem_data =    [(0, make_mem_data(0b00, 0b11, 0xbc1c)),
+mem_data =    [(0, make_mem_data(0b01, 0b10, 0xfb11)),
                # ~ (1, make_mem_data(0b11, 0b00, 0x4a4a)),
                # ~ (2, make_mem_data(0b11, 0b00, 0x00BB)),
 ]
@@ -254,29 +258,32 @@ def generates_random_stream(number):
     print("")
 
     for i in range(number):
-        case = random.randint(0, 6)
+        case = random.randint(0, 1)
         if case == 0:
             print("SKIP, ", end = '')
             data_raw += skip
         if case == 1:
-            print("IDLE, ", end = '')
-            for k in range(random.randint(1, 128)):
-                data_raw += idle
-        if case == 2:
-            print("FTS, ", end = '')
-            data_raw += fts
-        if case == 3:
             print("TLP, ", end = '')
             data_raw += tlp
-        if case == 4:
-            print("DLLP, ", end = '')
-            data_raw += tlp
-        if case == 5:
-            print("UNFINISHED TLP, ", end = '')
-            data_raw += unfinished_tlp
-        if case == 6:
-            print("UNFINISHED DLLP, ", end = '')
-            data_raw += unfinished_dllp
+        # ~ if case == 1:
+            # ~ print("IDLE, ", end = '')
+            # ~ for k in range(random.randint(1, 128)):
+                # ~ data_raw += idle
+        # ~ if case == 2:
+            # ~ print("FTS, ", end = '')
+            # ~ data_raw += fts
+        # ~ if case == 3:
+            # ~ print("TLP, ", end = '')
+            # ~ data_raw += tlp
+        # ~ if case == 4:
+            # ~ print("DLLP, ", end = '')
+            # ~ data_raw += tlp
+        # ~ if case == 5:
+            # ~ print("UNFINISHED TLP, ", end = '')
+            # ~ data_raw += unfinished_tlp
+        # ~ if case == 6:
+            # ~ print("UNFINISHED DLLP, ", end = '')
+            # ~ data_raw += unfinished_dllp
 
     # We don't want to finish on an unfinished packet
     if case > 4:
@@ -356,8 +363,8 @@ def main_generator(dut, csv=False):
     dut.rx_streamer.send(rx_packet)
     dut.tx_streamer.send(tx_packet)
 
-    yield from dut.rx_capture.simu.write(1)
-    yield from dut.tx_capture.simu.write(1)
+    # ~ yield from dut.rx_capture.simu.write(1)
+    # ~ yield from dut.tx_capture.simu.write(1)
 
     # Fill trigger memory
     for (addr, dat) in mem_data:
@@ -372,7 +379,7 @@ def main_generator(dut, csv=False):
     yield from dut.rx_capture.trigger.armed.write(1)
  
     # Configure and enable filter
-    yield from dut.rx_capture.filter.filterConfig.write(0xffffffff)
+    yield from dut.rx_capture.filter.filterConfig.write(4)
     yield from dut.rx_capture.filter.tlpDllpTimeoutCnt.write(32)
     yield from dut.rx_capture.filter.filterEnable.write(1)
 
@@ -384,56 +391,10 @@ def main_generator(dut, csv=False):
     yield from dut.rx_capture.recorder.mode.write(1)
 
     # Trigger offset from the storage windows start (a.k.a pre trigger size)
-    yield from dut.rx_capture.recorder.offset.write(10)
+    yield from dut.rx_capture.recorder.offset.write(2)
 
     # Post trigger size
-    yield from dut.rx_capture.recorder.size.write(10)
-
-    # Start recorder
-    yield from dut.rx_capture.recorder.start.write(1)
-
-    # Time stamp generator for filter
-    for i in range(max(len(values), len(gtp_rx_data))):      
-        yield dut.rx_capture.time.eq((yield dut.rx_capture.time) + 1)
-        yield dut.tx_capture.time.eq((yield dut.tx_capture.time) + 1)
- #       if i == 200:
- #           yield from dut.rx_capture.recorder.stop.write(1)
-        yield
-
-    yield from dut.rx_capture.recorder.stop.write(1)
-
-    yield from dut.rx_capture.simu.write(1)
-    yield from dut.tx_capture.simu.write(1)
-
-    # Fill trigger memory
-    for (addr, dat) in mem_data:
-        yield dut.rx_trig_wrport.adr.eq(addr)
-        yield dut.rx_trig_wrport.dat_w.eq(dat)
-        yield dut.rx_trig_wrport.we.eq(1)
-        yield
-    yield dut.rx_trig_wrport.we.eq(0)
-
-    # Arm trigger
-    yield from dut.rx_capture.trigger.size.write(len(mem_data))
-    yield from dut.rx_capture.trigger.armed.write(1)
- 
-    # Configure and enable filter
-    yield from dut.rx_capture.filter.filterConfig.write(0xffffffff)
-    yield from dut.rx_capture.filter.tlpDllpTimeoutCnt.write(32)
-    yield from dut.rx_capture.filter.filterEnable.write(1)
-
-    yield from dut.tx_capture.filter.filterConfig.write(0xffffffff)
-    yield from dut.tx_capture.filter.tlpDllpTimeoutCnt.write(32)
-    yield from dut.tx_capture.filter.filterEnable.write(1)
-
-    # Record mod 0 = RAW, 1 = FRAME
-    yield from dut.rx_capture.recorder.mode.write(1)
-
-    # Trigger offset from the storage windows start (a.k.a pre trigger size)
-    yield from dut.rx_capture.recorder.offset.write(10)
-
-    # Post trigger size
-    yield from dut.rx_capture.recorder.size.write(10)
+    yield from dut.rx_capture.recorder.size.write(2)
 
     # Start recorder
     yield from dut.rx_capture.recorder.start.write(1)
