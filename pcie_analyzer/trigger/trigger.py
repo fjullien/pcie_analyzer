@@ -85,14 +85,17 @@ class Trigger(Module, AutoCSR):
         # *                     Submodules                        *
         # *********************************************************
         buf0 = stream.Buffer(filter_layout)
+        buf1 = stream.Buffer(filter_layout)
         self.submodules += ClockDomainsRenamer(clock_domain)(buf0)
+        self.submodules += ClockDomainsRenamer(clock_domain)(buf1)
 
         # *********************************************************
         # *                    Combinatorial                      *
         # *********************************************************
         self.comb += [
             sink.connect(buf0.sink),
-            buf0.source.connect(source, omit={"trig"}),
+            buf0.source.connect(buf1.sink),
+            buf1.source.connect(source, omit={"trig"}),
             sink.ready.eq(source.ready),
             self.rdport.adr.eq(addr),
         ]
