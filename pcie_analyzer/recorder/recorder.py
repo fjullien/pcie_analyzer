@@ -240,7 +240,13 @@ class RingRecorder(Module, AutoCSR):
             If(stride.sink.ready & stride.sink.valid,
                 If(fifo.source.trig & fifo.source.valid,
                     NextValue(count, 0),
-                    NextValue(_trigAddr, addr),
+                    # If stride is complete, this next data will be in the
+                    # next address block
+                    If(stride.valid_token_count == data_per_chunk,
+                        NextValue(_trigAddr, addr + ADDRINCR),
+                    ).Else(
+                        NextValue(_trigAddr, addr),
+                    ),
                     NextState("FILL_POST_TRIG")
                 )
             ),
