@@ -55,6 +55,7 @@ class RingRecorder(Module, AutoCSR):
         first     = Signal()
         ext_trig  = Signal()
         count     = Signal(32)
+        sof_count = Signal(3)
 
         _trigExt  = Signal()
         _start    = Signal()
@@ -81,22 +82,28 @@ class RingRecorder(Module, AutoCSR):
         # Reserve 5 bits to indicate the number of valid chunks in record
         VALID_TOKEN_BITS = 5
 
+        # Reserve 3 bits to indicate the number of SOF in this block
+        SOF_COUNT_BITS = 3
+
         # Meta data position in DDR bloc write
         RECORD_START = -1
 
-        VALID_TOKEN_COUNT_START = RECORD_START
         VALID_TOKEN_COUNT_START = RECORD_START
         VALID_TOKEN_COUNT_END = RECORD_START - VALID_TOKEN_BITS
         VALID_TOKEN_COUNT = slice(VALID_TOKEN_COUNT_END,VALID_TOKEN_COUNT_START)
 
         TRIG_EXT = VALID_TOKEN_COUNT_END - 1
 
+        SOF_COUNT_START = TRIG_EXT
+        SOF_COUNT_END = TRIG_EXT - SOF_COUNT_BITS
+        SOF_COUNT = slice(SOF_COUNT_END,SOF_COUNT_START)
+
         print("Memory data width        = {:d} bits".format(dram_port.data_width))
 
         trigger_nbits = len(stream.Endpoint(trigger_layout).payload.raw_bits())
         print("Trigger stream data size = {:d} bits".format(trigger_nbits))
 
-        recorder_reserved_bits = len(first) + VALID_TOKEN_BITS + len(_trigExt)
+        recorder_reserved_bits = len(first) + VALID_TOKEN_BITS + len(_trigExt) + SOF_COUNT_BITS
 
         data_per_chunk   = (dram_port.data_width - recorder_reserved_bits) // trigger_nbits
         print("Chunks per block         = {:d} ({:d} bits)".format(data_per_chunk, data_per_chunk * trigger_nbits))
@@ -151,6 +158,7 @@ class RingRecorder(Module, AutoCSR):
 
             source.data[VALID_TOKEN_COUNT].eq(stride.valid_token_count),
             source.data[TRIG_EXT].eq(ext_trig),
+            source.data[SOF_COUNT].eq(sof_count),
         ]
 
         # *********************************************************
@@ -158,12 +166,22 @@ class RingRecorder(Module, AutoCSR):
         # *********************************************************
         sync = getattr(self.sync, clock_domain)
         sync += [
+            # Count SOF
+            If(stride.sink.valid & stride.sink.ready & stride.sink.sof, sof_count.eq(sof_count + 1)),
+
             # DRAM address increment
             If(stride.source.valid & stride.source.ready,
                 first.eq(0),
                 ext_trig.eq(0),
+                #If at the same time we get a SOF entering the converter, count it
+                If(stride.sink.valid & stride.sink.ready & stride.sink.sof,
+                    sof_count.eq(1),
+                ).Else(
+                    sof_count.eq(0),
+                ),
                 addr.eq(addr + ADDRINCR),
             ),
+
             # DRAM address wrap
             If(addr == (base + length - ADDRINCR), addr.eq(base)),
 
