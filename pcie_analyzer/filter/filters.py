@@ -399,8 +399,6 @@ class Filter(Module, AutoCSR):
                         If(skipEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
-                        ).Else(
-                            NextValue(last_ts, 0),
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.SKIP),
@@ -409,7 +407,8 @@ class Filter(Module, AutoCSR):
                         NextValue(count, 0),
                         NextValue(buf_out.source.ready, 1),
                         NextState("SKIP"),
-                    )
+                    ),
+                    If(~skipEnabled, NextValue(last_ts, 0)),
                 ),
 
                 # ---- IDLE ----
@@ -421,8 +420,6 @@ class Filter(Module, AutoCSR):
                         If(idleEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
-                        ).Else(
-                            NextValue(last_ts, 0),
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.IDLE),
@@ -431,7 +428,8 @@ class Filter(Module, AutoCSR):
                         NextValue(count, 0),
                         NextValue(buf_out.source.ready, 1),
                         NextState("IDLE"),
-                    )
+                    ),
+                    If(~idleEnabled, NextValue(last_ts, 0)),
                 ),
 
                 # ---- FTS ----
@@ -441,10 +439,7 @@ class Filter(Module, AutoCSR):
                         If(ftsEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
-                        ).Else(
-                            NextValue(last_ts, 0),
                         ),
-
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.FTS),
                         NextState("TIMESTAMP_LSB"),
@@ -452,20 +447,18 @@ class Filter(Module, AutoCSR):
                         NextValue(count, 0),
                         NextValue(buf_out.source.ready, 1),
                         NextState("FTS"),
-                    )
+                    ),
+                    If(~ftsEnabled, NextValue(last_ts, 0)),
                 ),
 
                 # ---- TS1 ----
                 If(buf_out.source.osets & (buf_out.source.type == osetsType.TS1) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
                         NextValue(source.data, buf_out.source.ts[16:32]),
-                        If(ftsEnabled,
+                        If(ts1Enabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
-                        ).Else(
-                            NextValue(last_ts, 0),
                         ),
-
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.TS1),
                         NextState("TIMESTAMP_LSB"),
@@ -473,20 +466,18 @@ class Filter(Module, AutoCSR):
                         NextValue(count, 0),
                         NextValue(buf_out.source.ready, 1),
                         NextState("TS1"),
-                    )
+                    ),
+                    If(~ts1Enabled, NextValue(last_ts, 0)),
                 ),
 
                 # ---- TS2 ----
                 If(buf_out.source.osets & (buf_out.source.type == osetsType.TS2) & (buf_out.source.data[8:16] == COM.value),
                     If(insert_ts,
                         NextValue(source.data, buf_out.source.ts[16:32]),
-                        If(ftsEnabled,
+                        If(ts2Enabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
-                        ).Else(
-                            NextValue(last_ts, 0),
                         ),
-
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.TS2),
                         NextState("TIMESTAMP_LSB"),
@@ -494,7 +485,8 @@ class Filter(Module, AutoCSR):
                         NextValue(count, 0),
                         NextValue(buf_out.source.ready, 1),
                         NextState("TS2"),
-                    )
+                    ),
+                    If(~ts2Enabled, NextValue(last_ts, 0)),
                 ),
 
                 # ---- TLP ----
@@ -504,8 +496,6 @@ class Filter(Module, AutoCSR):
                         If(tlpEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
-                        ).Else(
-                            NextValue(last_ts, 0),
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.TLP),
@@ -514,7 +504,8 @@ class Filter(Module, AutoCSR):
                         NextValue(count, 0),
                         NextValue(buf_out.source.ready, 1),
                         NextState("TLP"),
-                    )
+                    ),
+                    If(~tlpEnabled, NextValue(last_ts, 0)),
                 ),
 
                 # ---- DLLP ----
@@ -524,8 +515,6 @@ class Filter(Module, AutoCSR):
                         If(dllpEnabled,
                             NextValue(source.valid, 1),
                             NextValue(source.time, 1),
-                        ).Else(
-                            NextValue(last_ts, 0),
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.DLLP),
@@ -534,8 +523,9 @@ class Filter(Module, AutoCSR):
                         NextValue(count, 0),
                         NextValue(buf_out.source.ready, 1),
                         NextState("DLLP"),
-                    )
-                )
+                    ),
+                    If(~dllpEnabled, NextValue(last_ts, 0)),
+                ),
             ),
 
             If(~_filterEnable,
