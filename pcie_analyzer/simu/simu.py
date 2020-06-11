@@ -239,7 +239,7 @@ unfinished_tlp = [
 #  address    --+                   |   |      |
 #               |                   |   |      |
 #               v                   v   v      v
-mem_data =    [(0, make_mem_data(0b01, 0b10, 0xfb11)),
+mem_data =    [(0, make_mem_data(0b10, 0b01, 0x00fd)),
                # ~ (1, make_mem_data(0b11, 0b00, 0x4a4a)),
                # ~ (2, make_mem_data(0b11, 0b00, 0x00BB)),
 ]
@@ -258,17 +258,17 @@ def generates_random_stream(number):
     print("")
 
     for i in range(number):
-        case = random.randint(0, 1)
+        case = random.randint(0, 2)
         if case == 0:
             print("SKIP, ", end = '')
             data_raw += skip
         if case == 1:
             print("TLP, ", end = '')
             data_raw += tlp
-        # ~ if case == 1:
-            # ~ print("IDLE, ", end = '')
-            # ~ for k in range(random.randint(1, 128)):
-                # ~ data_raw += idle
+        if case == 2:
+            print("IDLE, ", end = '')
+            for k in range(random.randint(1, 128)):
+                data_raw += idle
         # ~ if case == 2:
             # ~ print("FTS, ", end = '')
             # ~ data_raw += fts
@@ -379,7 +379,7 @@ def main_generator(dut, csv=False):
     yield from dut.rx_capture.trigger.armed.write(1)
  
     # Configure and enable filter
-    yield from dut.rx_capture.filter.filterConfig.write(4)
+    yield from dut.rx_capture.filter.filterConfig.write(0xffffffff)
     yield from dut.rx_capture.filter.tlpDllpTimeoutCnt.write(32)
     yield from dut.rx_capture.filter.filterEnable.write(1)
 

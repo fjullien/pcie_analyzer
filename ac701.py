@@ -24,7 +24,7 @@ from liteeth.phy.s7rgmii import LiteEthPHYRGMII
 from liteeth.core import LiteEthUDPIPCore
 from liteeth.frontend.etherbone import LiteEthEtherbone
 
-from pcie_analyzer.liteiclink.gtp_7series import GTPQuadPLL, GTP
+from liteiclink.transceiver.gtp_7series import GTPQuadPLL, GTP
 
 from pcie_analyzer.capture_pipeline.capture_pipeline import *
 from pcie_analyzer.common import *
@@ -177,7 +177,7 @@ class _CRG(Module):
 # *********************************************************
 
 class PCIeAnalyzer(SoCSDRAM):
-    def __init__(self, platform, connector="pcie", linerate=2.5e9):
+    def __init__(self, platform, connector="pcie", linerate=2.5e9, use_gtp=True):
         assert connector in ["pcie"]
         sys_clk_freq = int(50e6)
 
@@ -259,56 +259,63 @@ class PCIeAnalyzer(SoCSDRAM):
         # *********************************************************
         # *                     GTP Refclk                        *
         # *********************************************************
-        refclk      = Signal()
-        refclk_freq = 100e6
-        refclk_pads = platform.request("pcie_refclk")
-        self.specials += Instance("IBUFDS_GTE2",
-            i_CEB   = 0,
-            i_I     = refclk_pads.p,
-            i_IB    = refclk_pads.n,
-            o_O     = refclk)
+        if use_gtp:
+            refclk      = Signal()
+            refclk_freq = 100e6
+            refclk_pads = platform.request("pcie_refclk")
+            self.specials += Instance("IBUFDS_GTE2",
+                i_CEB   = 0,
+                i_I     = refclk_pads.p,
+                i_IB    = refclk_pads.n,
+                o_O     = refclk)
 
-        # *********************************************************
-        # *                     GTP PLL                           *
-        # *********************************************************
-        qpll = GTPQuadPLL(refclk, refclk_freq, linerate)
-        print(qpll)
-        self.submodules += qpll
+            # *********************************************************
+            # *                     GTP PLL                           *
+            # *********************************************************
+            qpll = GTPQuadPLL(refclk, refclk_freq, linerate)
+            print(qpll)
+            self.submodules += qpll
 
-        # *********************************************************
-        # *                       GTPs                            *
-        # *********************************************************
-        for i in range(2):
-            tx_pads = platform.request(connector + "_tx", i)
-            rx_pads = platform.request(connector + "_rx", i)
-            gtp = GTP(qpll, tx_pads, rx_pads, sys_clk_freq,
-                data_width       = 20,
-                clock_aligner    = False,
-                tx_buffer_enable = True,
-                rx_buffer_enable = True)
-            gtp.add_stream_endpoints()
-            gtp.tx_enable = 0
-            setattr(self.submodules, "gtp"+str(i), gtp)
-            platform.add_period_constraint(gtp.cd_tx.clk, 1e9/gtp.tx_clk_freq)
-            platform.add_period_constraint(gtp.cd_rx.clk, 1e9/gtp.rx_clk_freq)
+            # *********************************************************
+            # *                       GTPs                            *
+            # *********************************************************
+            for i in range(2):
+                tx_pads = platform.request(connector + "_tx", i)
+                rx_pads = platform.request(connector + "_rx", i)
+                gtp = GTP(qpll, tx_pads, rx_pads, sys_clk_freq,
+                    data_width       = 20,
+                    clock_aligner    = False,
+                    tx_buffer_enable = True,
+                    rx_buffer_enable = True)
+                gtp.add_stream_endpoints()
+                gtp.tx_enable = 0
+                setattr(self.submodules, "gtp"+str(i), gtp)
+                platform.add_period_constraint(gtp.cd_tx.clk, 1e9/gtp.tx_clk_freq)
+                platform.add_period_constraint(gtp.cd_rx.clk, 1e9/gtp.rx_clk_freq)
+                self.platform.add_false_path_constraints(
+                    self.crg.cd_sys.clk,
+                    gtp.cd_tx.clk,
+                    gtp.cd_rx.clk)
+        else:
+            gtp0_rx_cd = ClockDomain("gtp0_rx")
+            self.clock_domains += gtp0_rx_cd
+            self.comb += [
+                gtp0_rx_cd.clk.eq(ClockSignal("clk125")),
+                gtp0_rx_cd.rst.eq(ResetSignal("clk125"))
+            ]
+
+            gtp1_rx_cd = ClockDomain("gtp1_rx")
+            self.clock_domains += gtp1_rx_cd
+            self.comb += [
+                gtp1_rx_cd.clk.eq(ClockSignal("clk125")),
+                gtp1_rx_cd.rst.eq(ResetSignal("clk125"))
+            ]
+
             self.platform.add_false_path_constraints(
                 self.crg.cd_sys.clk,
-                gtp.cd_tx.clk,
-                gtp.cd_rx.clk)
+                gtp1_rx_cd.clk,
+                gtp0_rx_cd.clk)
 
-        # *********************************************************
-        # *         Capture pipeline clock selection              *
-        # *********************************************************
-        rx_sim = Signal()
-        tx_sim = Signal()
-
-        self.comb += [
-            self.gtp0.simuclk.eq(self.crg.cd_clk125.clk),
-            self.gtp0.clksel.eq(rx_sim),
-
-            self.gtp1.simuclk.eq(self.crg.cd_clk125.clk),
-            self.gtp1.clksel.eq(tx_sim),
-        ]
 
         # *********************************************************
         # *                      Time base                        *
@@ -330,8 +337,11 @@ class PCIeAnalyzer(SoCSDRAM):
 
         # Elaborate gtp0_ready
         gtp0_ready = Signal()
-        self.specials += MultiReg(qpll.lock & self.gtp0.rx_ready, gtp0_ready, "gtp0_rx")
-        
+        if use_gtp:
+            self.specials += MultiReg(qpll.lock & self.gtp0.rx_ready, gtp0_ready, "gtp0_rx")
+        else:
+            gtp0_ready.eq(0)
+
         # Request RX DDR3 port
         rx_port = self.sdram.crossbar.get_port("write", 256)
 
@@ -344,14 +354,12 @@ class PCIeAnalyzer(SoCSDRAM):
         self.add_csr("rx_capture_exerciser_mem")
         self.add_csr("rx_capture_trigger_mem")
 
-        pipeline_ready = Signal()
+        if use_gtp:
+            self.comb += self.gtp0.source.connect(self.rx_capture.sink, omit={"valid"})
 
         self.comb += [
-            self.gtp0.source.connect(self.rx_capture.sink, omit={"valid"}),
-            pipeline_ready.eq(gtp0_ready | self.rx_capture.simmode),
-            self.rx_capture.sink.valid.eq(pipeline_ready),
+            self.rx_capture.sink.valid.eq(gtp0_ready | self.rx_capture.simmode),
             self.rx_capture.time.eq(time_rx),
-            rx_sim.eq(self.rx_capture.simu.storage),
         ]
 
         # *********************************************************
@@ -363,8 +371,11 @@ class PCIeAnalyzer(SoCSDRAM):
 
         # Elaborate gtp1_ready
         gtp1_ready = Signal()
-        self.specials += MultiReg(qpll.lock & self.gtp1.rx_ready, gtp1_ready, "gtp1_rx")
-        
+        if use_gtp:
+            self.specials += MultiReg(qpll.lock & self.gtp1.rx_ready, gtp1_ready, "gtp1_rx")
+        else:
+            gtp1_ready.eq(0)
+
         # Request TX DDR3 port
         tx_port = self.sdram.crossbar.get_port("write", 256)
 
@@ -377,11 +388,12 @@ class PCIeAnalyzer(SoCSDRAM):
         self.add_csr("tx_capture_exerciser_mem")
         self.add_csr("tx_capture_trigger_mem")
 
+        if use_gtp:
+            self.comb += self.gtp1.source.connect(self.tx_capture.sink, omit={"valid"})
+
         self.comb += [
-            self.gtp1.source.connect(self.tx_capture.sink, omit={"valid"}),
-            self.tx_capture.sink.valid.eq(gtp1_ready),
+            self.tx_capture.sink.valid.eq(gtp1_ready | self.tx_capture.simmode),
             self.tx_capture.time.eq(time_tx),
-            tx_sim.eq(self.tx_capture.simu.storage),
         ]
 
         # *********************************************************
@@ -402,8 +414,8 @@ class PCIeAnalyzer(SoCSDRAM):
         self.sync.gtp0_rx += led_counter.eq(led_counter + 1)
         self.comb += platform.request("user_led", 0).eq(led_counter[24])
 
-        self.comb += platform.request("user_led", 1).eq(self.gtp0.rx_cdr_lock)
-        self.comb += platform.request("user_led", 2).eq(self.gtp1.rx_cdr_lock)
+        self.comb += platform.request("user_led", 1).eq(0)
+        self.comb += platform.request("user_led", 2).eq(0)
         self.comb += platform.request("user_led", 3).eq(0)
 
         # *********************************************************
@@ -411,20 +423,7 @@ class PCIeAnalyzer(SoCSDRAM):
         # *********************************************************
         # ~ from litescope import LiteScopeAnalyzer
         # ~ analyzer_signals = [
-            # ~ self.rx_recorder.sink.data,
-            # ~ self.rx_recorder.enable,
-            # ~ self.rx_recorder.trigAddr.status,
-            # ~ self.rx_recorder.start.re,
-            # ~ self.rx_recorder.fsm,
-            # ~ self.rx_recorder.fifo.source.data,
-            # ~ self.rx_recorder.fifo.source.trig,
-            # ~ self.rx_recorder.fifo.level,
-            # ~ self.rx_recorder.source.address,
-            # ~ self.rx_recorder.source.data,
-            # ~ self.rx_recorder.source.ready,
-            # ~ self.rx_recorder.source.valid,
-            # ~ self.rx_descrambler.source.data,
-            # ~ self.rx_trigger.fsm
+
         # ~ ]
 
         # ~ self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 4096, clock_domain="gtp0_rx", csr_csv="tools/analyzer.csv")
@@ -464,7 +463,7 @@ def main():
     if "flash" in sys.argv[1:]:
         flash()
     platform = Platform()
-    soc     = PCIeAnalyzer(platform)
+    soc     = PCIeAnalyzer(platform, use_gtp=False)
     builder = Builder(soc, output_dir="build", csr_csv="tools/csr.csv")
     builder.build(build_name="ac701")
 

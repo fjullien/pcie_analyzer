@@ -54,8 +54,9 @@ class Trigger(Module, AutoCSR):
         self.size      = CSRStorage(8)   # Pattern size - 1
 
         self.enable   = Signal()
+        self.trigExt  = Signal()
 
-        self.sink   =   sink = stream.Endpoint(filter_layout)
+        self.sink   =   sink = stream.Endpoint(trigger_layout)
         self.source = source = stream.Endpoint(trigger_layout)
 
         # *********************************************************
@@ -63,6 +64,7 @@ class Trigger(Module, AutoCSR):
         # *********************************************************
         matches  = Signal(8)
         addr     = Signal(log2_int(mem_size))
+        trig     = Signal()
 
         _armed   = Signal()
         _trigged = Signal()
@@ -84,8 +86,8 @@ class Trigger(Module, AutoCSR):
         # *********************************************************
         # *                     Submodules                        *
         # *********************************************************
-        buf0 = stream.Buffer(filter_layout)
-        buf1 = stream.Buffer(filter_layout)
+        buf0 = stream.Buffer(trigger_layout)
+        buf1 = stream.Buffer(trigger_layout)
         self.submodules += ClockDomainsRenamer(clock_domain)(buf0)
         self.submodules += ClockDomainsRenamer(clock_domain)(buf1)
 
@@ -98,6 +100,8 @@ class Trigger(Module, AutoCSR):
             buf1.source.connect(source, omit={"trig"}),
             sink.ready.eq(source.ready),
             self.rdport.adr.eq(addr),
+            source.trig.eq(buf1.source.trig | trig),
+            self.trigExt.eq(trig),
         ]
 
         # *********************************************************
@@ -105,14 +109,13 @@ class Trigger(Module, AutoCSR):
         # *********************************************************
         fsm = ResetInserter()(FSM(reset_state="IDLE"))
         self.submodules.fsm = ClockDomainsRenamer(clock_domain)(fsm)
-        self.comb += self.fsm.reset.eq(~self.enable)
 
         fsm.act("IDLE",
-            If(_armed,
+            If(_armed & self.enable,
                 NextValue(addr, 0),
                 NextValue(matches, 0),
                 NextState("FIRST")
-            )
+            ),
         )
 
         fsm.act("FIRST",
@@ -138,6 +141,9 @@ class Trigger(Module, AutoCSR):
                         NextValue(addr, addr + 1),
                         NextState("UNALIGNED_CHECK")
                 )
+            ),
+            If(~self.enable,
+                NextState("IDLE")
             )
         )
 
@@ -145,7 +151,7 @@ class Trigger(Module, AutoCSR):
             If(matches == _size,
                 NextState("DONE"),
                 NextValue(_trigged, 1),
-                source.trig.eq(1),
+                trig.eq(1),
             ).Else(
                 If((((self.rdport.dat_r[UPPER_BYTE] == buf0.source.data[UPPER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
                    ((self.rdport.dat_r[LOWER_BYTE]  == buf0.source.data[LOWER_BYTE])  | self.rdport.dat_r[LOWER_DONT_CARE]) &
@@ -160,6 +166,9 @@ class Trigger(Module, AutoCSR):
                     NextValue(addr, 0),
                     NextState("FIRST")
                 )
+            ),
+            If(~self.enable,
+                NextState("IDLE")
             )
         )
 
@@ -167,7 +176,7 @@ class Trigger(Module, AutoCSR):
             If(matches == _size,
                 NextState("DONE"),
                 NextValue(_trigged, 1),
-                source.trig.eq(1),
+                trig.eq(1),
             ).Else(
                 If((((self.rdport.dat_r[UPPER_BYTE] == buf0.source.data[LOWER_BYTE])  | self.rdport.dat_r[UPPER_DONT_CARE]) &
                     ((self.rdport.dat_r[LOWER_BYTE] == sink.data[UPPER_BYTE])         | self.rdport.dat_r[LOWER_DONT_CARE]) &
@@ -183,6 +192,9 @@ class Trigger(Module, AutoCSR):
                         NextValue(addr, 0),
                         NextState("FIRST")
                 )
+            ),
+            If(~self.enable,
+                NextState("IDLE")
             )
         )
 
@@ -190,5 +202,8 @@ class Trigger(Module, AutoCSR):
             If(_armed == 0,
                 NextState("IDLE"),
                 NextValue(_trigged, 0),
+            ),
+            If(~self.enable,
+                NextState("IDLE")
             )
         )

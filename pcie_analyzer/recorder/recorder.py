@@ -185,7 +185,7 @@ class RingRecorder(Module, AutoCSR):
             # DRAM address wrap
             If(addr == (base + length - ADDRINCR), addr.eq(base)),
 
-            If(_trigExt & (_state == 6), ext_trig.eq(1)),
+            If(fifo.source.trig & fifo.source.valid & (_state == 6), ext_trig.eq(1)),
 
             If(_state == 0,
                 addr.eq(base),
@@ -329,7 +329,7 @@ class RingRecorder(Module, AutoCSR):
         fsm.act("FORCED",
             NextValue(_state, 6),
             NextValue(self.fifo.reset, 0),
-            If(_trigExt, NextValue(_trigAddr, addr)),
+            If(fifo.source.trig & fifo.source.valid, NextValue(_trigAddr, addr)),
             If(_forced == 0,
                 NextValue(stride.flush, 1),
                 NextState("IDLE"),

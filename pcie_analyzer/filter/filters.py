@@ -62,6 +62,7 @@ class state(IntEnum):
     TLP  = 4
     DLLP = 5
     IDLE = 6
+    FILTER = 7
 
 filter_fifo_layout = [
     ("data" , 16),
@@ -95,8 +96,9 @@ class Filter(Module, AutoCSR):
         self.tlpDllpTimeoutCnt = CSRStorage(32)  # Payload size used for error detection
 
         self.ts           = Signal(32)      # Global time stamp
+        self.trigExt      = Signal()        # Insert a trigger flag
 
-        self.source       = source = stream.Endpoint(filter_layout)
+        self.source       = source = stream.Endpoint(trigger_layout)
         self.sink         = sink   = stream.Endpoint(descrambler_layout)
 
         # *********************************************************
@@ -107,6 +109,15 @@ class Filter(Module, AutoCSR):
         _tlpDllpTimeoutCnt  = Signal(32)
 
         _filterEnable = Signal()
+        _trigExt      = Signal()
+
+        trigPending   = Signal()
+        clearTrig     = Signal()
+        enabledDatas  = Signal()
+
+        self.trigPending = trigPending
+        self._trigExt = _trigExt
+        self.clearTrig = clearTrig
 
         skipEnabled  = Signal()
         ftsEnabled   = Signal()
@@ -122,6 +133,7 @@ class Filter(Module, AutoCSR):
         last_ts      = Signal(32)
         payload_cnt  = Signal(32)
         from_error   = Signal()
+        ts_trig      = Signal()
 
         # *********************************************************
         # *                         CDC                           *
@@ -130,6 +142,7 @@ class Filter(Module, AutoCSR):
         self.specials += MultiReg(self.filterConfig.storage, _filterConfig, clock_domain)
         self.specials += MultiReg(self.filterEnable.storage, _filterEnable, clock_domain)
         self.specials += MultiReg(self.tlpDllpTimeoutCnt.storage, _tlpDllpTimeoutCnt, clock_domain)
+        self.specials += MultiReg(self.trigExt, _trigExt, clock_domain)
 
         # *********************************************************
         # *                     Submodules                        *
@@ -160,6 +173,12 @@ class Filter(Module, AutoCSR):
             ts1Enabled.eq( _filterConfig[4]),
             ts2Enabled.eq( _filterConfig[5]),
             idleEnabled.eq( _filterConfig[6]),
+        ]
+
+        sync = getattr(self.sync, clock_domain)
+        sync += [
+            If(_trigExt, trigPending.eq(1)),
+            If(clearTrig, trigPending.eq(0))
         ]
 
         # *********************************************************
@@ -375,6 +394,8 @@ class Filter(Module, AutoCSR):
             NextValue(buf_out.source.ready, 0),
             NextValue(from_error, 0),
             NextValue(source.eof, 0),
+            NextValue(clearTrig, 0),
+            NextValue(source.trig, 0),
 
             If(from_error,
                 NextValue(buf_out.source.ready, 1),
@@ -402,6 +423,7 @@ class Filter(Module, AutoCSR):
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.SKIP),
+                        NextValue(ts_trig, 0),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
@@ -423,6 +445,7 @@ class Filter(Module, AutoCSR):
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.IDLE),
+                        NextValue(ts_trig, 0),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
@@ -442,6 +465,7 @@ class Filter(Module, AutoCSR):
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.FTS),
+                        NextValue(ts_trig, 0),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
@@ -461,6 +485,7 @@ class Filter(Module, AutoCSR):
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.TS1),
+                        NextValue(ts_trig, 0),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
@@ -480,6 +505,7 @@ class Filter(Module, AutoCSR):
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.TS2),
+                        NextValue(ts_trig, 0),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
@@ -499,6 +525,7 @@ class Filter(Module, AutoCSR):
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.TLP),
+                        NextValue(ts_trig, 0),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
@@ -518,6 +545,7 @@ class Filter(Module, AutoCSR):
                         ),
                         NextValue(buf_out.source.ready, 0),
                         NextValue(state_after, state.DLLP),
+                        NextValue(ts_trig, 0),
                         NextState("TIMESTAMP_LSB"),
                     ).Else(
                         NextValue(count, 0),
@@ -526,6 +554,13 @@ class Filter(Module, AutoCSR):
                     ),
                     If(~dllpEnabled, NextValue(last_ts, 0)),
                 ),
+            # buf_out.source is not valid
+            ).Else(
+                    If(trigPending,
+                        NextValue(buf_out.source.ready, 0),
+                        NextValue(state_after, state.FILTER),
+                        NextState("TIMESTAMP_MSB_TRIG"),
+                    )
             ),
 
             If(~_filterEnable,
@@ -536,10 +571,36 @@ class Filter(Module, AutoCSR):
         # *********************************************************
         # *            Insert LSB part of timestamp               *
         # *********************************************************
+        
+        fsmReader.act("TIMESTAMP_MSB_TRIG",
+                NextValue(source.time, 1),
+                NextValue(source.valid, 1),
+                NextValue(source.data, _ts[16:32]),
+                NextState("TIMESTAMP_LSB"),
+                NextValue(source.trig, 1),
+                NextValue(clearTrig, 1),
+                NextValue(ts_trig, 1),
+        ),
+
+        # *********************************************************
+        # *            Insert LSB part of timestamp               *
+        # *********************************************************
         fsmReader.act("TIMESTAMP_LSB",
             NextValue(source.data, buf_out.source.ts[0:16]),
-            NextValue(count, 0),
+            If(ts_trig,
+                NextValue(source.data, _ts[0:16]),
+                NextValue(source.trig, 1),
+            ).Else(
+                NextValue(count, 0),
+            ),
+
+            NextValue(ts_trig, 0),
+
             NextValue(buf_out.source.ready, 1),
+
+            If((state_after == state.FILTER),
+                NextState("FILTER"),
+            ),
 
             If((state_after == state.SKIP),
                 If(skipEnabled,
@@ -605,9 +666,16 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+            NextValue(source.trig, 0),
 
             NextValue(source.sof, 0),
             NextValue(source.eof, 0),
+
+            If(trigPending,
+                NextValue(buf_out.source.ready, 0),
+                NextValue(state_after, state.SKIP),
+                NextState("TIMESTAMP_MSB_TRIG"),
+            ),
 
             If(count == 1,
                 NextValue(buf_out.source.ready, 0),
@@ -638,9 +706,16 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+            NextValue(source.trig, 0),
 
             NextValue(source.sof, 0),
             NextValue(source.eof, 0),
+
+            If(trigPending,
+                NextValue(buf_out.source.ready, 0),
+                NextValue(state_after, state.IDLE),
+                NextState("TIMESTAMP_MSB_TRIG"),
+            ),
 
             If(count == 1,
                 NextValue(buf_out.source.ready, 0),
@@ -673,9 +748,16 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+            NextValue(source.trig, 0),
 
             NextValue(source.sof, 0),
             NextValue(source.eof, 0),
+
+            If(trigPending,
+                NextValue(buf_out.source.ready, 0),
+                NextValue(state_after, state.FTS),
+                NextState("TIMESTAMP_MSB_TRIG"),
+            ),
 
             If(count == 1,
                 NextValue(buf_out.source.ready, 0),
@@ -708,9 +790,16 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+            NextValue(source.trig, 0),
 
             NextValue(source.sof, 0),
             NextValue(source.eof, 0),
+
+            If(trigPending,
+                NextValue(buf_out.source.ready, 0),
+                NextValue(state_after, state.TS1),
+                NextState("TIMESTAMP_MSB_TRIG"),
+            ),
 
             If(count == 7,
                 NextValue(buf_out.source.ready, 0),
@@ -743,9 +832,16 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+            NextValue(source.trig, 0),
 
             NextValue(source.sof, 0),
             NextValue(source.eof, 0),
+
+            If(trigPending,
+                NextValue(buf_out.source.ready, 0),
+                NextValue(state_after, state.TS2),
+                NextState("TIMESTAMP_MSB_TRIG"),
+            ),
 
             If(count == 7,
                 NextValue(buf_out.source.ready, 0),
@@ -778,9 +874,16 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+            NextValue(source.trig, 0),
 
             NextValue(source.sof, 0),
             NextValue(source.eof, 0),
+
+            If(trigPending,
+                NextValue(buf_out.source.ready, 0),
+                NextValue(state_after, state.TLP),
+                NextState("TIMESTAMP_MSB_TRIG"),
+            ),
 
             If((buf_out.source.ctrl[0] & (buf_out.source.data[0:8] == END.value)) | fifo.source.error,
                 If(tlpEnabled, NextValue(source.eof, 1)),
@@ -814,9 +917,16 @@ class Filter(Module, AutoCSR):
             NextValue(source.valid, 1),
             NextValue(last_ts, last_ts + 1),
             NextValue(source.time, 0),
+            NextValue(source.trig, 0),
 
             NextValue(source.sof, 0),
             NextValue(source.eof, 0),
+
+            If(trigPending,
+                NextValue(buf_out.source.ready, 0),
+                NextValue(state_after, state.DLLP),
+                NextState("TIMESTAMP_MSB_TRIG"),
+            ),
 
             If((buf_out.source.ctrl[0] & (buf_out.source.data[0:8] == END.value)) | fifo.source.error,
                 If(dllpEnabled, NextValue(source.eof, 1)),

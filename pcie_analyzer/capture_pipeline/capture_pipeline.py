@@ -97,7 +97,8 @@ class CapturePipeline(Module, AutoCSR):
 
             self.trigger.source.connect(self.recorder.sink),
             self.trigger.enable.eq(self.recorder.enableTrigger),
-            self.trigOut.eq(self.trigger.source.trig),
+            self.trigOut.eq(self.trigger.trigExt),
+            self.filter.trigExt.eq(self.trigExt),
 
             self.recorder.source.connect(self.cdc.sink),
             self.recorder.forced.eq(self.forced),
