@@ -265,7 +265,12 @@ class RingRecorder(Module, AutoCSR):
                     ).Else(
                         NextValue(_trigAddr, addr),
                     ),
-                    NextState("FILL_POST_TRIG")
+                    NextState("FILL_POST_TRIG"),
+                    If(fifo.source.eof & (_size == 1),
+                        NextValue(stride.flush, 1),
+                        NextValue(self.fifo.reset, 1),
+                        NextState("DONE")
+                    )
                 )
             ),
             If(_stop,
